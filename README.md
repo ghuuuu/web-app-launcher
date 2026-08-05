@@ -1,6 +1,6 @@
 # Web App Launcher
 
-![version](https://img.shields.io/badge/version-0.2.0-ec3013) ![no build](https://img.shields.io/badge/build-none-232019) ![PWA](https://img.shields.io/badge/PWA-installable-2d6cdf) ![storage](https://img.shields.io/badge/storage-localStorage-6b655c)
+![version](https://img.shields.io/badge/version-0.3.0-ec3013) ![no build](https://img.shields.io/badge/build-none-232019) ![PWA](https://img.shields.io/badge/PWA-installable-2d6cdf) ![storage](https://img.shields.io/badge/storage-localStorage-6b655c)
 
 A front page for the local dev servers you keep coming back to. Add the ports you run, see which are live at a glance, and jump to any of them in a click. One HTML file, no backend, no build step — everything is stored in your browser.
 
@@ -69,7 +69,8 @@ index.html?theme=broadsheet
 | `broadsheet.css` | Broadsheet theme (`?theme=broadsheet`), with a dark variant. |
 | `manifest.webmanifest` | PWA manifest (install metadata). |
 | `sw.js` | Service worker — caches the app shell for offline / instant loads. |
-| `icon-192.png`, `icon-512.png` | App icons. |
+| `icon.svg` | App icon (vector) — source for the favicon and PWA icons. |
+| `icon-192.png`, `icon-512.png` | Raster app icons (generated from `icon.svg`). |
 
 ## Notes
 
@@ -83,9 +84,10 @@ index.html?theme=broadsheet
 
 ## Changelog
 
-### Unreleased
+### 0.3.0
 - **Scan modes** — Smart (70+ known dev/self-hosted ports), Custom, and Full (1–65535), each running in the background with a live progress bar and current-port readout.
 - In-app **HTTPS warning** when the page is served over HTTPS but points at `http://localhost` hosts (mixed content blocks the checks).
+- New **app icon** (`icon.svg`) used for the favicon and PWA/home-screen icons.
 
 ### 0.2.0
 - Full-width layout: one column per host (live hosts sort left); each host shows only what's live, with a **Show offline** toggle.

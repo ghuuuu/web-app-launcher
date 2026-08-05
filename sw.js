@@ -1,9 +1,9 @@
 // Web App Launcher service worker — caches the app shell for instant / offline loads.
 // Bumped per release so old caches are cleared on activate.
-const CACHE = 'wal-v0.2.0';
+const CACHE = 'wal-v0.3.0';
 const ASSETS = [
   './', './index.html', './modernist.css', './broadsheet.css',
-  './manifest.webmanifest', './icon-192.png', './icon-512.png'
+  './manifest.webmanifest', './icon.svg', './icon-192.png', './icon-512.png'
 ];
 
 self.addEventListener('install', function (e) {
