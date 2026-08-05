@@ -249,3 +249,20 @@ textarea.input { min-height: 90px; resize: vertical; }
 }
 .dialog-body { font-size: 14px; opacity: 0.85; }
 .dialog-actions { display: flex; justify-content: flex-end; gap: var(--space-2); margin-top: var(--space-2); }
+
+/* ── Dark mode ── inverts the ground and lifts the accent so the red still
+   reads on a dark surface; the tonal ramps below stay usable as-is. */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-bg: #1b1a18;
+    --color-surface: #262320;
+    --color-text: #ecebe8;
+    --color-accent: #ff5a3d;
+    --color-accent-600: #ff6f52;
+    --color-accent-700: #ff8a72;
+    --color-divider: color-mix(in srgb, #ecebe8 24%, transparent);
+    --shadow-sm: 0 1px 2px rgba(0,0,0,.5);
+    --shadow-md: 0 4px 14px rgba(0,0,0,.55);
+    --shadow-lg: 0 16px 44px rgba(0,0,0,.62);
+  }
+}

@@ -2,8 +2,15 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Web App Launcher</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#f3f2f2" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#1b1a18" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Launcher">
 <link rel="stylesheet" href="modernist.css" id="ds-css">
 <script src="https://unpkg.com/lucide@0.454.0/dist/umd/lucide.min.js" id="ds-icons" onload="window.lucide&&window.lucide.createIcons()"></script>
 <script>
@@ -26,7 +33,7 @@
   html,body{margin:0;height:100%}
   body{background:var(--color-bg);color:var(--color-text);font-family:var(--font-body);-webkit-font-smoothing:antialiased}
   code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.9em}
-  .wrap{max-width:none;margin:0 auto;padding:var(--space-6) var(--space-6) var(--space-8);min-height:100%;display:flex;flex-direction:column}
+  .wrap{max-width:none;margin:0 auto;padding:max(var(--space-6),env(safe-area-inset-top)) max(var(--space-6),env(safe-area-inset-right)) max(var(--space-8),env(safe-area-inset-bottom)) max(var(--space-6),env(safe-area-inset-left));min-height:100%;display:flex;flex-direction:column}
   @keyframes pulse{0%,100%{opacity:1}50%{opacity:.25}}
 
   /* ---- toolbar ---- */
@@ -43,7 +50,7 @@
   .list{list-style:none;margin:0;padding:0}
   .svc{position:relative}
   .svc-hit{display:flex;align-items:center;gap:var(--space-3);text-decoration:none;color:inherit;padding:14px 96px 14px 24px}
-  .grip{position:absolute;left:0;top:0;bottom:0;width:22px;display:flex;align-items:center;justify-content:center;cursor:grab;opacity:.22;transition:opacity .15s}
+  .grip{position:absolute;left:0;top:0;bottom:0;width:22px;display:flex;align-items:center;justify-content:center;cursor:grab;opacity:.22;transition:opacity .15s;touch-action:none}
   .svc:hover .grip{opacity:.6}
   .grip:active{cursor:grabbing}
   .svc.dragging{opacity:.35}
@@ -103,10 +110,11 @@
   }
 
   @media (max-width:680px){
-    .wrap{padding:var(--space-4) var(--space-3) var(--space-6)}
+    .wrap{padding:max(var(--space-4),env(safe-area-inset-top)) max(var(--space-3),env(safe-area-inset-right)) max(var(--space-6),env(safe-area-inset-bottom)) max(var(--space-3),env(safe-area-inset-left))}
     .search{flex:1 1 100%;order:-1}
     .toolbar .spacer{display:none}
     .btn-icon{width:40px;height:40px}
+    .svc-name{white-space:normal;overflow:visible;overflow-wrap:anywhere}
     .host-add{grid-template-columns:1fr 1fr}
     .host-add .btn{grid-column:1 / -1}
     .theme-modernist .brand{font-size:22px}
@@ -191,6 +199,7 @@
   var scanning = false;
   var checkTimer = null;
   var activeTabHostId = null;                            // which host's tab is open (mobile)
+  var tabPinned = false;                                 // true once the user taps a tab this session
   var mqMobile = window.matchMedia('(max-width: 680px)');
   function isMobile(){ return mqMobile.matches; }
 
@@ -245,8 +254,8 @@
   function cssEsc(v){ return (window.CSS&&CSS.escape) ? CSS.escape(v) : v; }
   function refreshIcons(){ if(THEME==='modernist' && window.lucide) lucide.createIcons(); }
   var ICONS = {
-    broadsheet:{add:'plus',search:'magnifying-glass',scan:'radar',edit:'pencil-simple',del:'trash',drag:'dots-six-vertical',hosts:'hard-drives',refresh:'arrows-clockwise',settings:'gear-six'},
-    modernist:{add:'plus',search:'search',scan:'radar',edit:'pencil',del:'trash-2',drag:'grip-vertical',hosts:'server',refresh:'refresh-cw',settings:'settings'}
+    broadsheet:{add:'plus',search:'magnifying-glass',scan:'radar',edit:'pencil-simple',del:'trash',drag:'dots-six-vertical',hosts:'hard-drives',refresh:'arrows-clockwise',settings:'gear-six',transfer:'export'},
+    modernist:{add:'plus',search:'search',scan:'radar',edit:'pencil',del:'trash-2',drag:'grip-vertical',hosts:'server',refresh:'refresh-cw',settings:'settings',transfer:'arrow-down-up'}
   };
   function icon(name){
     var n = ICONS[THEME][name] || name;
@@ -285,6 +294,7 @@
       + '<button class="btn btn-secondary" data-open="scan">'+icon('scan')+'<span>Scan</span></button>'
       + '<button class="btn btn-secondary btn-icon" data-open="settings" title="Scan settings" aria-label="Scan settings">'+icon('settings')+'</button>'
       + '<button class="btn btn-secondary btn-icon" data-refresh title="Re-check now" aria-label="Re-check now">'+icon('refresh')+'</button>'
+      + '<button class="btn btn-secondary btn-icon" data-open="transfer" title="Export / import" aria-label="Export or import">'+icon('transfer')+'</button>'
       + '<button class="btn btn-primary" data-open="add">'+icon('add')+'<span>Add server</span></button>'
       + '</div>';
   }
@@ -328,10 +338,7 @@
     if(!hs.length){ region.innerHTML = '<div class="empty"><h3>No hosts selected</h3><p class="text-muted">Open <b>Hosts</b> and check at least one host to show your servers.</p></div>'; lastGroupSig=''; refreshIcons(); return; }
     var items = currentItems();
     if(!items.length){ region.innerHTML = '<div class="empty"><h3>No matches</h3><p class="text-muted">Nothing matches “'+esc(searchQ)+'”.</p></div>'; lastGroupSig=''; refreshIcons(); return; }
-    // Hosts with live servers sit on the left; hosts with none sort to the right.
-    var ordered = hs.map(function(h,i){ return {h:h,i:i,on:onlineCount(h,items)}; })
-      .sort(function(a,b){ return (b.on>0?1:0)-(a.on>0?1:0) || a.i-b.i; })
-      .map(function(x){ return x.h; });
+    var ordered = orderedHosts(items);
     if (isMobile()){
       // Narrow screens: one host at a time behind a tab bar, to save horizontal space.
       var act = resolveActiveTab(ordered);
@@ -344,9 +351,17 @@
     paintStatus();
   }
   function onlineCount(h, items){ return items.filter(function(s){ return statusOf(h.id,s)==='up'; }).length; }
+  function orderedHosts(items){
+    // Hosts with live servers sit on the left; hosts with none sort to the right.
+    return selectedHosts().map(function(h,i){ return {h:h,i:i,on:onlineCount(h,items)}; })
+      .sort(function(a,b){ return (b.on>0?1:0)-(a.on>0?1:0) || a.i-b.i; })
+      .map(function(x){ return x.h; });
+  }
   function resolveActiveTab(ordered){
     if(!ordered.length) return null;
-    if(!ordered.some(function(h){ return h.id===activeTabHostId; })) activeTabHostId = ordered[0].id;
+    // Default to the left-most tab (the most-online host); once the user taps a tab it
+    // sticks for the session. A page refresh clears that and returns to the left-most.
+    if(!tabPinned || !ordered.some(function(h){ return h.id===activeTabHostId; })) activeTabHostId = ordered[0].id;
     return ordered.find(function(h){ return h.id===activeTabHostId; });
   }
   function tabsHTML(ordered, items){
@@ -363,7 +378,7 @@
     var fav = DEMO ? '' : '<img src="'+esc(url)+'/favicon.ico" alt="" loading="lazy" onload="this.style.opacity=1" onerror="this.remove()">';
     var st = statusOf(h.id,s);
     return '<li class="svc'+(st==='down'?' svc-off':'')+'" data-id="'+s.id+'" data-host="'+h.id+'">'
-      + '<span class="grip" draggable="true" title="Drag to reorder" aria-hidden="true">'+icon('drag')+'</span>'
+      + '<span class="grip" draggable="false" title="Drag to reorder" aria-hidden="true">'+icon('drag')+'</span>'
       + '<a class="svc-hit" href="'+esc(url)+'" target="_blank" rel="noopener" draggable="false">'
       +   '<span class="logo">'+esc(initial)+fav+'</span>'
       +   '<span class="svc-main"><span class="svc-name">'+esc(s.name)+'</span><span class="svc-url">'+esc(h.host)+':'+s.port+'</span></span>'
@@ -611,13 +626,68 @@
     el.textContent = buildScanPorts(cfg).length + ' ports per scan × ' + nH + ' host' + (nH===1?'':'s') + ' · re-checks every ' + cfg.interval + 's';
   }
 
+  // ---- export / import (compact, compressed, copy-paste transfer) ----
+  function b64urlEncode(bytes){ var b=''; for(var i=0;i<bytes.length;i++) b+=String.fromCharCode(bytes[i]); return btoa(b).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,''); }
+  function b64urlDecode(str){ str=str.replace(/-/g,'+').replace(/_/g,'/'); while(str.length%4) str+='='; var bin=atob(str), out=new Uint8Array(bin.length); for(var i=0;i<bin.length;i++) out[i]=bin.charCodeAt(i); return out; }
+  async function deflate(str){ if(typeof CompressionStream==='undefined') return null; var cs=new CompressionStream('deflate-raw'), w=cs.writable.getWriter(); w.write(new TextEncoder().encode(str)); w.close(); return new Uint8Array(await new Response(cs.readable).arrayBuffer()); }
+  async function inflate(bytes){ var ds=new DecompressionStream('deflate-raw'), w=ds.writable.getWriter(); w.write(bytes); w.close(); return new TextDecoder().decode(await new Response(ds.readable).arrayBuffer()); }
+  function compactState(){
+    var idx={}; state.hosts.forEach(function(h,i){ idx[h.id]=i; });
+    var c=state.scanConfig||defaultScanConfig();
+    return { v:1,
+      h: state.hosts.map(function(h){ return [h.label,h.host,h.scheme||'http']; }),
+      s: state.selectedHostIds.map(function(id){ return idx[id]; }).filter(function(i){ return i!=null; }),
+      g: [c.from,c.to,c.step,(c.extra||[]),c.interval],
+      d: state.services.map(function(x){ return [x.name,x.port]; }),
+      o: state.showOffline?1:0 };
+  }
+  async function exportCode(){
+    var json=JSON.stringify(compactState());
+    var bytes=await deflate(json);
+    return bytes ? 'WAL1'+b64urlEncode(bytes) : 'WAL0'+b64urlEncode(new TextEncoder().encode(json));
+  }
+  async function importCode(code){
+    var m=/^WAL([01])([A-Za-z0-9\-_]+)$/.exec((code||'').trim());
+    if(!m) throw new Error('that doesn’t look like a launcher code');
+    var bytes=b64urlDecode(m[2]);
+    var json = m[1]==='1' ? await inflate(bytes) : new TextDecoder().decode(bytes);
+    var d=JSON.parse(json);
+    var hosts=(d.h||[]).map(function(t){ return {id:uid(),label:t[0]||t[1],host:t[1],scheme:t[2]||'http'}; });
+    if(!hosts.length) throw new Error('no hosts found in that code');
+    var selected=(d.s||[]).map(function(i){ return hosts[i]&&hosts[i].id; }).filter(Boolean);
+    if(!selected.length) selected=[hosts[0].id];
+    var g=d.g||[];
+    var sc={from:parseInt(g[0],10)||3000,to:parseInt(g[1],10)||9000,step:parseInt(g[2],10)||100,extra:(g[3]||[]).map(Number).filter(function(x){return x>0;}),interval:parseInt(g[4],10)||5};
+    var services=(d.d||[]).map(function(t){ return {id:uid(),name:t[0]||('Port '+t[1]),port:parseInt(t[1],10)}; }).filter(function(x){ return x.port>0; });
+    state={hosts:hosts,selectedHostIds:selected,scanConfig:sc,services:services,showOffline:!!d.o};
+    statusMap={}; activeTabHostId=null; tabPinned=false;
+    save(); render(); pingAll(); startChecks();
+  }
+  function openTransfer(){
+    openModal(''
+      + '<div class="dialog-backdrop" data-backdrop><div class="dialog" style="width:min(560px,100%)">'
+      + '<div class="dialog-title">Export / Import</div>'
+      + '<div class="dialog-body">'
+      +   '<p class="text-muted" style="font-size:12px;margin:0 0 var(--space-2)">Copy this code and paste it into the launcher in another browser to carry your hosts and settings across. It’s compressed, so it stays short.</p>'
+      +   '<textarea class="input" id="ex-code" readonly rows="3" onclick="this.select()" style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;word-break:break-all">generating…</textarea>'
+      +   '<button class="btn btn-secondary" data-act="copy-export" style="width:100%;margin-top:8px">Copy code</button>'
+      +   '<div class="hr"></div>'
+      +   '<p class="text-muted" style="font-size:12px;margin:0 0 var(--space-2)">Paste a code here and import to <b>replace</b> your current hosts and settings.</p>'
+      +   '<textarea class="input" id="im-code" rows="3" placeholder="Paste a WAL… code" style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;word-break:break-all"></textarea>'
+      +   '<div id="im-msg" class="text-muted" style="font-size:12px;margin-top:6px"></div>'
+      + '</div>'
+      + '<div class="dialog-actions"><button class="btn btn-secondary" data-act="cancel">Close</button><button class="btn btn-primary" data-act="do-import">Import</button></div>'
+      + '</div></div>');
+    exportCode().then(function(code){ var t=document.getElementById('ex-code'); if(t) t.value=code; });
+  }
+
   // ---- events ----
   document.addEventListener('click', function(e){
     var openBtn = e.target.closest('[data-open]');
-    if (openBtn){ var w=openBtn.getAttribute('data-open'); if(w==='add')openEdit(null); else if(w==='hosts')openHosts(); else if(w==='scan')openScan(); else if(w==='settings')openSettings(); return; }
+    if (openBtn){ var w=openBtn.getAttribute('data-open'); if(w==='add')openEdit(null); else if(w==='hosts')openHosts(); else if(w==='scan')openScan(); else if(w==='settings')openSettings(); else if(w==='transfer')openTransfer(); return; }
     if (e.target.closest('[data-refresh]')){ pingAll(); return; }
     var tabBtn = e.target.closest('[data-tab]');
-    if (tabBtn){ activeTabHostId = tabBtn.getAttribute('data-tab'); renderList(); return; }
+    if (tabBtn){ activeTabHostId = tabBtn.getAttribute('data-tab'); tabPinned = true; renderList(); return; }
     if (e.target.closest('[data-backdrop]') === e.target){ closeModal(); return; }
 
     var actEl = e.target.closest('[data-act]');
@@ -633,6 +703,8 @@
     else if (act==='scan-start'){ runScan(); }
     else if (act==='save-settings'){ state.scanConfig = readSettingsForm(); save(); startChecks(); closeModal(); }
     else if (act==='reset-settings'){ state.scanConfig = defaultScanConfig(); save(); startChecks(); openSettings(); }
+    else if (act==='copy-export'){ var tx=document.getElementById('ex-code'); if(tx){ tx.select(); if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(tx.value).catch(function(){}); else { try{document.execCommand('copy');}catch(_){} } var ob=actEl.textContent; actEl.textContent='Copied!'; setTimeout(function(){ actEl.textContent=ob; },1200); } }
+    else if (act==='do-import'){ var im=document.getElementById('im-code'), msg=document.getElementById('im-msg'); var code=im?im.value:''; if(!confirm('Replace all current hosts and settings with the pasted code?')) return; importCode(code).then(function(){ closeModal(); }).catch(function(err){ if(msg){ msg.textContent='Could not import — '+err.message+'.'; msg.style.color='var(--color-accent)'; } }); }
     else if (act==='add-found'){ var p=parseInt(actEl.getAttribute('data-port'),10); if(!state.services.some(function(s){return s.port===p;})) saveService(null,'Port '+p,p); var rr=document.getElementById('scan-results'); if(rr) rr.querySelectorAll('[data-port="'+p+'"]').forEach(function(el){ el.remove(); }); }
   });
 
@@ -658,24 +730,53 @@
 
   document.addEventListener('keydown', function(e){ if(e.key==='Escape') closeModal(); });
 
-  // ---- drag reorder (via grip) ----
+  // ---- drag reorder (pointer-based: works for both mouse and touch) ----
   var dragId = null;
-  document.addEventListener('dragstart', function(e){
+  document.addEventListener('pointerdown', function(e){
     var grip = e.target.closest('.grip'); if(!grip) return;
     var li = grip.closest('.svc'); if(!li) return;
+    e.preventDefault();
     dragId = li.dataset.id; li.classList.add('dragging');
-    try{ e.dataTransfer.effectAllowed='move'; e.dataTransfer.setData('text/plain',dragId); }catch(_){}
+    try{ grip.setPointerCapture(e.pointerId); }catch(_){}
   });
-  document.addEventListener('dragend', function(){ dragId=null; document.querySelectorAll('.svc').forEach(function(x){x.classList.remove('dragging','dragover');}); });
-  document.addEventListener('dragover', function(e){
-    if(!dragId) return; var li=e.target.closest('.svc'); if(!li) return; e.preventDefault();
+  document.addEventListener('pointermove', function(e){
+    if(!dragId) return;
+    var t = document.elementFromPoint(e.clientX, e.clientY);
+    var li = t && t.closest ? t.closest('.svc') : null;
     document.querySelectorAll('.svc.dragover').forEach(function(x){x.classList.remove('dragover');});
-    if(li.dataset.id!==dragId) li.classList.add('dragover');
+    if(li && li.dataset.id!==dragId) li.classList.add('dragover');
   });
-  document.addEventListener('drop', function(e){
-    if(!dragId) return; var li=e.target.closest('.svc'); if(!li) return; e.preventDefault();
-    reorder(dragId, li.dataset.id); dragId=null;
-  });
+  function endDrag(e){
+    if(!dragId) return;
+    var t = e && e.clientX!=null ? document.elementFromPoint(e.clientX, e.clientY) : null;
+    var li = t && t.closest ? t.closest('.svc') : null;
+    if(li && li.dataset.id!==dragId) reorder(dragId, li.dataset.id);
+    dragId = null;
+    document.querySelectorAll('.svc').forEach(function(x){x.classList.remove('dragging','dragover');});
+  }
+  document.addEventListener('pointerup', endDrag);
+  document.addEventListener('pointercancel', endDrag);
+
+  // ---- swipe between host tabs (mobile) ----
+  var swX = null, swY = null;
+  document.addEventListener('touchstart', function(e){
+    if(!isMobile() || dragId){ swX=null; return; }
+    if(e.target.closest('.grip') || e.target.closest('.hosttabs') || e.target.closest('#modal')){ swX=null; return; }
+    var t=e.touches[0]; swX=t.clientX; swY=t.clientY;
+  }, {passive:true});
+  document.addEventListener('touchend', function(e){
+    if(swX==null) return;
+    var t=e.changedTouches[0], dx=t.clientX-swX, dy=t.clientY-swY; swX=null;
+    if(Math.abs(dx)<60 || Math.abs(dx)<Math.abs(dy)*1.4) return;
+    switchTab(dx<0?1:-1);
+  }, {passive:true});
+  function switchTab(dir){
+    var ordered = orderedHosts(currentItems());
+    if(ordered.length<2) return;
+    var i = ordered.findIndex(function(h){ return h.id===activeTabHostId; }); if(i<0) i=0;
+    activeTabHostId = ordered[(i+dir+ordered.length)%ordered.length].id;
+    tabPinned = true; renderList();
+  }
 
   // ---- cross-frame sync (both skins share nothing unless same key; still refresh on external writes) ----
   window.addEventListener('storage', function(e){ if(e.key===KEY){ try{ state=JSON.parse(e.newValue)||state; }catch(_){} migrate(); render(); pingAll(); } });
@@ -693,6 +794,11 @@
   pingAll();
   startChecks();
 })();
+</script>
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function(){ navigator.serviceWorker.register('sw.js').catch(function(){}); });
+  }
 </script>
 </body>
 </html>
