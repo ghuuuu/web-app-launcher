@@ -87,6 +87,33 @@
   .svc-off:hover{opacity:.85}
   .theme-modernist .hostcols .list{grid-template-columns:1fr}
 
+  /* ---- mobile: hosts collapse to tabs, one host shown at a time ---- */
+  .hosttabs{display:flex;gap:6px;overflow-x:auto;margin-bottom:var(--space-4);-webkit-overflow-scrolling:touch;scrollbar-width:thin}
+  .hosttab{flex:0 0 auto;display:inline-flex;align-items:center;gap:7px;padding:9px 13px;border:1px solid var(--color-divider);background:transparent;color:inherit;font-family:var(--font-heading);font-weight:var(--font-heading-weight);font-size:14px;line-height:1;cursor:pointer;border-radius:var(--radius-md);white-space:nowrap}
+  .hosttab .hosttab-n{font-size:11px;font-variant-numeric:tabular-nums;opacity:.65;background:color-mix(in srgb,var(--color-text) 12%,transparent);padding:2px 7px;border-radius:10px}
+  .hosttab.active{background:var(--color-accent);color:var(--color-bg);border-color:var(--color-accent)}
+  .hosttab.active .hosttab-n{opacity:1;background:color-mix(in srgb,#ffffff 28%,transparent)}
+  .theme-modernist .hostpane .list{grid-template-columns:1fr}
+  .host-add{display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:end}
+
+  /* Touch devices have no hover — keep the row actions and drag grip visible. */
+  @media (hover:none){
+    .svc-actions{opacity:1}
+    .grip{opacity:.35}
+  }
+
+  @media (max-width:680px){
+    .wrap{padding:var(--space-4) var(--space-3) var(--space-6)}
+    .search{flex:1 1 100%;order:-1}
+    .toolbar .spacer{display:none}
+    .btn-icon{width:40px;height:40px}
+    .host-add{grid-template-columns:1fr 1fr}
+    .host-add .btn{grid-column:1 / -1}
+    .theme-modernist .brand{font-size:22px}
+    .theme-modernist .statement b{font-size:24px}
+    .theme-broadsheet .mast-title{font-size:38px}
+  }
+
   /* ---- host picker (checkboxes in the Hosts dialog) ---- */
   .selall{display:flex;align-items:center;gap:10px;padding:0 0 var(--space-2);margin-bottom:var(--space-2);border-bottom:1px solid var(--color-divider);font-size:13px;font-weight:600;cursor:pointer}
   .hostpick{display:flex;align-items:center;gap:10px}
@@ -163,6 +190,9 @@
   var editingId = null;
   var scanning = false;
   var checkTimer = null;
+  var activeTabHostId = null;                            // which host's tab is open (mobile)
+  var mqMobile = window.matchMedia('(max-width: 680px)');
+  function isMobile(){ return mqMobile.matches; }
 
   // ---- state ----
   function uid(){ return Math.random().toString(36).slice(2,9); }
@@ -302,12 +332,29 @@
     var ordered = hs.map(function(h,i){ return {h:h,i:i,on:onlineCount(h,items)}; })
       .sort(function(a,b){ return (b.on>0?1:0)-(a.on>0?1:0) || a.i-b.i; })
       .map(function(x){ return x.h; });
-    region.innerHTML = '<div class="hostcols">'+ordered.map(function(h){ return hostSection(h, items); }).join('')+'</div>';
+    if (isMobile()){
+      // Narrow screens: one host at a time behind a tab bar, to save horizontal space.
+      var act = resolveActiveTab(ordered);
+      region.innerHTML = tabsHTML(ordered, items) + '<div class="hostpane">' + hostSection(act, items) + '</div>';
+    } else {
+      region.innerHTML = '<div class="hostcols">'+ordered.map(function(h){ return hostSection(h, items); }).join('')+'</div>';
+    }
     lastGroupSig = groupSig();
     refreshIcons();
     paintStatus();
   }
   function onlineCount(h, items){ return items.filter(function(s){ return statusOf(h.id,s)==='up'; }).length; }
+  function resolveActiveTab(ordered){
+    if(!ordered.length) return null;
+    if(!ordered.some(function(h){ return h.id===activeTabHostId; })) activeTabHostId = ordered[0].id;
+    return ordered.find(function(h){ return h.id===activeTabHostId; });
+  }
+  function tabsHTML(ordered, items){
+    return '<div class="hosttabs">'+ordered.map(function(h){
+      var on = onlineCount(h, items);
+      return '<button class="hosttab'+(h.id===activeTabHostId?' active':'')+'" data-tab="'+h.id+'">'+esc(h.label)+'<span class="hosttab-n">'+on+'</span></button>';
+    }).join('')+'</div>';
+  }
   function svcHTML(h,s){
     var url = svcUrl(h,s);
     var initial = ((s.name||'').trim()[0]||'#').toUpperCase();
@@ -446,7 +493,7 @@
       +   '<label class="selall"><input type="checkbox" id="host-all" data-act="sel-all"'+(allSelected()?' checked':'')+'><span>Select all hosts</span></label>'
       +   '<div id="host-list" style="display:flex;flex-direction:column;gap:10px">'+hostRows()+'</div>'
       +   '<div class="hr"></div>'
-      +   '<div style="display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:end">'
+      +   '<div class="host-add">'
       +     '<div class="field" style="margin:0"><label>Label</label><input class="input" id="h-label" placeholder="Tailscale — iPad"></div>'
       +     '<div class="field" style="margin:0"><label>Host / IP</label><input class="input" id="h-host" placeholder="100.101.42.7"></div>'
       +     '<button class="btn btn-primary" data-act="add-host">Add</button>'
@@ -569,6 +616,8 @@
     var openBtn = e.target.closest('[data-open]');
     if (openBtn){ var w=openBtn.getAttribute('data-open'); if(w==='add')openEdit(null); else if(w==='hosts')openHosts(); else if(w==='scan')openScan(); else if(w==='settings')openSettings(); return; }
     if (e.target.closest('[data-refresh]')){ pingAll(); return; }
+    var tabBtn = e.target.closest('[data-tab]');
+    if (tabBtn){ activeTabHostId = tabBtn.getAttribute('data-tab'); renderList(); return; }
     if (e.target.closest('[data-backdrop]') === e.target){ closeModal(); return; }
 
     var actEl = e.target.closest('[data-act]');
@@ -632,6 +681,14 @@
   window.addEventListener('storage', function(e){ if(e.key===KEY){ try{ state=JSON.parse(e.newValue)||state; }catch(_){} migrate(); render(); pingAll(); } });
 
   // ---- boot ----
+  // Re-render when crossing the mobile/desktop breakpoint (columns <-> tabs). Listen to
+  // both matchMedia and resize, and only re-render on an actual flip, so it's reliable
+  // across browsers without churning on every resize tick.
+  var wasMobile = isMobile();
+  function onViewport(){ var m = isMobile(); if(m!==wasMobile){ wasMobile = m; render(); } }
+  if (mqMobile.addEventListener) mqMobile.addEventListener('change', onViewport);
+  else if (mqMobile.addListener) mqMobile.addListener(onViewport);   // older Safari
+  window.addEventListener('resize', onViewport);
   render();
   pingAll();
   startChecks();
