@@ -16,13 +16,13 @@ A front page for the local dev servers you keep coming back to. Add the ports yo
 
 ## Getting started
 
-Open **`launcher.html`** in a browser — that's the whole app. It starts empty; add your first server (or **Scan** for running ones) and it remembers them.
+Open **`index.html`** in a browser — that's the whole app. It starts empty; add your first server (or **Scan** for running ones) and it remembers them.
 
 To serve the folder instead of opening the file directly, any static server works:
 
 ```bash
 python -m http.server 4173
-# then open http://localhost:4173/launcher.html
+# then open http://localhost:4173/index.html
 ```
 
 ## Using it
@@ -41,14 +41,14 @@ python -m http.server 4173
 **Modernist** (Archivo, hard edges, red accent) is the default. Append `?theme=broadsheet` for the **Broadsheet** look (Source Serif, newspaper masthead, cyan accent):
 
 ```
-launcher.html?theme=broadsheet
+index.html?theme=broadsheet
 ```
 
 ## Files
 
 | File | What it is |
 | --- | --- |
-| `launcher.html` | **The app** — markup, logic, and layout in one file. |
+| `index.html` | **The app** — markup, logic, and layout in one file. |
 | `modernist.css` | Modernist theme (default). |
 | `broadsheet.css` | Broadsheet theme (`?theme=broadsheet`). |
 
