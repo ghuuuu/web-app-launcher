@@ -9,7 +9,7 @@ A front page for the local dev servers you keep coming back to. Add the ports yo
 - **A launcher list** of your dev servers, each a click away in a new tab, with the site's own favicon.
 - **Live status** — every server is pinged on a schedule; live ones rise to the top of each host. Re-checks keep the last known status until a fresh result lands, so the list never flickers.
 - **Multiple hosts, side by side** — reach the *same* ports across different bases (e.g. `localhost` and a Tailscale IP). Tick the hosts you want in the **Hosts** panel; each becomes its own full-width column (hosts with live servers sort left), each carries its own `http`/`https`, and **Select all** toggles them together. Only what's live on a host shows there — a **Show offline** toggle reveals the rest.
-- **Scan** — sweeps a port range plus known extras across **every selected host** and lists anything that answers but isn't on your list yet, one click to add.
+- **Scan, three ways** — **Smart** (70+ well-known dev & self-hosted ports: Vite, Next, Immich, Nextcloud, NocoBase, Ollama, Jellyfin…), **Custom** (your configured range + extras), or **Full** (every port `1–65535`). Scans run in the **background** with a progress bar showing what's being checked; anything found that isn't on your list is one click to add, across **every selected host**.
 - **Installable (PWA)** — add it to your home screen / dock and it opens like a native app, and loads offline.
 - **Mobile-friendly** — on small screens hosts collapse to tabs (swipe or tap between them); everything stays touch-sized.
 - **Export / import** — copy a short code and paste it into the app in another browser to carry your hosts and settings across.
@@ -45,7 +45,7 @@ Open **Export / Import** (the ⤒ button in the toolbar), **Copy code**, then pa
 | --- | --- |
 | **Add server** | Add a port (name optional — type just a port to quick-add). |
 | **Hosts** | Check which hosts to show and scan across; add/remove hosts; set each one's `http`/`https`. |
-| **Scan** | Ping a range of ports on every selected host and add the ones that answer. |
+| **Scan** | Smart / Custom / Full port scan across every selected host, in the background with a progress bar. |
 | **Show offline** | Reveal servers that aren't live on a host (dimmed, at the bottom); off by default. |
 | **Settings** | Scan range (`from` / `to` / `step`), extra ports, and the live re-check interval. |
 | **Export / Import** | Copy a code to move hosts + settings to another browser, or paste one to import. |
@@ -82,6 +82,10 @@ index.html?theme=broadsheet
 [MIT](LICENSE) © Gerald Untario
 
 ## Changelog
+
+### Unreleased
+- **Scan modes** — Smart (70+ known dev/self-hosted ports), Custom, and Full (1–65535), each running in the background with a live progress bar and current-port readout.
+- In-app **HTTPS warning** when the page is served over HTTPS but points at `http://localhost` hosts (mixed content blocks the checks).
 
 ### 0.2.0
 - Full-width layout: one column per host (live hosts sort left); each host shows only what's live, with a **Show offline** toggle.

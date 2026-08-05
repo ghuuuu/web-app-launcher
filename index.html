@@ -103,6 +103,32 @@
   .theme-modernist .hostpane .list{grid-template-columns:1fr}
   .host-add{display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:end}
 
+  /* ---- HTTPS banner + three-mode scan + background progress ---- */
+  .btn-sm{font-size:12px;padding:5px 11px;min-height:0}
+  .banner{display:flex;gap:10px;align-items:flex-start;padding:10px 13px;margin-bottom:var(--space-4);font-size:12.5px;line-height:1.45;background:color-mix(in srgb,var(--color-accent) 12%,var(--color-surface));border:1px solid color-mix(in srgb,var(--color-accent) 45%,transparent);border-radius:var(--radius-md)}
+  .banner b{color:var(--color-accent)}
+  .banner .banner-i{color:var(--color-accent);font-size:15px;line-height:1.3;flex:none}
+  .banner .banner-x{margin-left:auto;flex:none}
+  .scanmode{border:1px solid var(--color-divider);border-radius:var(--radius-md);padding:10px 12px;margin-bottom:10px}
+  .scanmode-h{display:flex;align-items:center;gap:10px}
+  .scanmode-h .btn{margin-left:auto}
+  .smartlist{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:3px 12px;margin-top:8px;font-size:12px;max-height:190px;overflow:auto}
+  .smartlist code{opacity:.75}
+  .scanpanel{border:1px solid var(--color-divider);border-radius:var(--radius-md);padding:12px 14px;margin-bottom:var(--space-4);background:var(--color-surface)}
+  .scanpanel-h{display:flex;align-items:center;gap:10px;margin-bottom:9px}
+  .scanpanel-title{font-family:var(--font-heading);font-weight:var(--font-heading-weight)}
+  .scanpanel-status{font-size:11px;letter-spacing:.1em;text-transform:uppercase;opacity:.55}
+  .scanpanel-h .btn{margin-left:auto}
+  .scanbar{height:8px;background:color-mix(in srgb,var(--color-text) 12%,transparent);border-radius:6px;overflow:hidden}
+  .scanbar-fill{height:100%;width:0;background:var(--color-accent);transition:width .18s}
+  .scanpanel-meta{display:flex;justify-content:space-between;gap:12px;font-size:12px;opacity:.7;margin-top:7px;font-variant-numeric:tabular-nums}
+  .scanpanel-meta #scan-cur{font-family:ui-monospace,Menlo,monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .scan-found{display:flex;flex-direction:column;gap:6px;margin-top:11px;max-height:230px;overflow:auto}
+  .scan-foundrow{display:flex;align-items:center;gap:10px}
+  .scan-foundrow code{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .scan-foundrow .dot{width:9px;height:9px}
+  .scan-lbl{font-size:11px;opacity:.6;white-space:nowrap}
+
   /* Touch devices have no hover — keep the row actions and drag grip visible. */
   @media (hover:none){
     .svc-actions{opacity:1}
@@ -198,6 +224,8 @@
   var editingId = null;
   var scanning = false;
   var checkTimer = null;
+  var scanState = null;                                  // background scan {mode,total,done,found,running,current}
+  var bannerDismissed = false;
   var activeTabHostId = null;                            // which host's tab is open (mobile)
   var tabPinned = false;                                 // true once the user taps a tab this session
   var mqMobile = window.matchMedia('(max-width: 680px)');
@@ -264,9 +292,17 @@
 
   // ---- render ----
   function render(){
-    app.innerHTML = headerHTML() + toolbarHTML() + '<div id="list-region"></div>' + footerHTML();
+    app.innerHTML = bannerHTML() + headerHTML() + toolbarHTML() + scanPanelHTML() + '<div id="list-region"></div>' + footerHTML();
     renderList();
     refreshIcons();
+  }
+  function showHttpsWarning(){ return location.protocol==='https:' && !bannerDismissed && selectedHosts().some(function(h){ return (h.scheme||'http')==='http'; }); }
+  function bannerHTML(){
+    if(!showHttpsWarning()) return '';
+    return '<div class="banner"><span class="banner-i" aria-hidden="true">⚠</span>'
+      + '<div>This page is loaded over <b>HTTPS</b>, so the browser blocks its checks to <code>http://localhost</code> servers as mixed content — they’ll show offline and scans find nothing. Open the launcher over <b>http</b> (locally, or the installed app) to reach them.</div>'
+      + '<button class="btn btn-ghost btn-icon banner-x" data-act="banner-x" title="Dismiss" aria-label="Dismiss">'+icon('del')+'</button>'
+      + '</div>';
   }
   function headerHTML(){
     var nH=selectedHosts().length, nS=state.services.length, nL=liveCount();
@@ -534,56 +570,106 @@
     render();
   }
 
+  // ---- port scan: three modes, runs in the background with a progress bar ----
+  var DEMO_OPEN = {3300:1,8096:1,2283:1,13000:1,11434:1};
+  var SMART_PORTS = [
+    {port:80,label:'HTTP / Nextcloud'},{port:443,label:'HTTPS / Nextcloud'},
+    {port:1234,label:'Dev / LM Studio'},{port:1420,label:'Tauri'},{port:1880,label:'Node-RED'},{port:1883,label:'MQTT'},
+    {port:2283,label:'Immich'},{port:2342,label:'PhotoPrism'},
+    {port:3000,label:'Node / Next / Grafana / Gitea'},{port:3001,label:'Dev / Uptime Kuma'},{port:3306,label:'MySQL'},{port:3333,label:'Dev server'},{port:3456,label:'Vikunja'},
+    {port:4000,label:'Dev / Dashy'},{port:4173,label:'Vite preview'},{port:4200,label:'Angular'},{port:4321,label:'Astro'},{port:4533,label:'Navidrome'},
+    {port:5000,label:'Flask / Kavita'},{port:5001,label:'Dev / Frigate'},{port:5006,label:'Actual Budget'},{port:5055,label:'Overseerr'},{port:5173,label:'Vite'},{port:5174,label:'Vite (alt)'},{port:5432,label:'PostgreSQL'},{port:5540,label:'Redis Insight'},{port:5555,label:'Prisma Studio'},{port:5601,label:'Kibana'},{port:5678,label:'n8n'},
+    {port:6006,label:'Storybook'},{port:6379,label:'Redis'},{port:6767,label:'Bazarr'},
+    {port:7575,label:'Homarr'},{port:7860,label:'Gradio / A1111'},{port:7878,label:'Radarr'},
+    {port:8000,label:'Django / Paperless / FastAPI'},{port:8006,label:'Proxmox'},{port:8055,label:'Directus'},{port:8069,label:'Odoo'},{port:8080,label:'HTTP alt / many apps'},{port:8081,label:'Dev alt'},{port:8083,label:'Calibre-Web'},{port:8090,label:'PocketBase'},{port:8096,label:'Jellyfin'},{port:8112,label:'Deluge'},{port:8123,label:'Home Assistant'},{port:8181,label:'Tautulli'},{port:8188,label:'ComfyUI'},{port:8200,label:'Vault / Duplicati'},{port:8384,label:'Syncthing'},{port:8443,label:'HTTPS alt / Unifi'},{port:8787,label:'Wrangler / Headroom'},{port:8888,label:'Jupyter'},{port:8983,label:'Solr'},{port:8989,label:'Sonarr'},
+    {port:9000,label:'Portainer / MinIO'},{port:9090,label:'Prometheus / Cockpit'},{port:9091,label:'Transmission'},{port:9092,label:'Kafka'},{port:9117,label:'Jackett'},{port:9200,label:'Elasticsearch'},{port:9443,label:'Portainer (HTTPS)'},{port:9696,label:'Prowlarr'},{port:9925,label:'Mealie'},{port:9981,label:'Tvheadend'},
+    {port:11434,label:'Ollama'},{port:13000,label:'NocoBase'},{port:13378,label:'Audiobookshelf'},{port:15672,label:'RabbitMQ'},{port:19006,label:'Expo web'},{port:25600,label:'Komga'},{port:27017,label:'MongoDB'},{port:32400,label:'Plex'},{port:37777,label:'claude-mem'}
+  ];
+  function scanPortsFor(mode){
+    if(mode==='full'){ var a=[]; for(var p=1;p<=65535;p++) a.push({port:p}); return a; }
+    if(mode==='smart') return SMART_PORTS.map(function(x){ return {port:x.port,label:x.label}; });
+    return buildScanPorts().map(function(p){ return {port:p}; });
+  }
+  function demoPorts(){ var m={}; SMART_PORTS.forEach(function(p){ m[p.port]=p.label; }); Object.keys(DEMO_OPEN).forEach(function(p){ if(m[p]==null) m[p]=''; }); return Object.keys(m).map(function(p){ return {port:+p,label:m[p]}; }); }
+
   function openScan(){
-    var nH=selectedHosts().length;
+    var nH=selectedHosts().length, hostTxt = nH===1?('<code>'+esc(baseUrl(primaryHost()))+'</code>'):('your <b>'+nH+'</b> selected hosts');
+    var c = state.scanConfig||defaultScanConfig();
     openModal(''
-      + '<div class="dialog-backdrop" data-backdrop><div class="dialog" style="width:min(540px,100%)">'
+      + '<div class="dialog-backdrop" data-backdrop><div class="dialog" style="width:min(560px,100%)">'
       + '<div class="dialog-title">Scan for running servers</div>'
       + '<div class="dialog-body">'
-      +   '<p class="text-muted" style="font-size:12px;margin:0 0 var(--space-3)">Pings '+buildScanPorts().length+' ports on '+(nH===1?('<code>'+esc(baseUrl(primaryHost()))+'</code>'):('each of your <b>'+nH+'</b> selected hosts'))+' and lists any that answer but aren’t on your list yet.</p>'
-      +   '<div style="display:flex;gap:8px;align-items:center;margin-bottom:var(--space-3);flex-wrap:wrap"><button class="btn btn-primary" data-act="scan-start">'+icon('scan')+'<span>Start scan</span></button><button class="btn btn-secondary btn-icon" data-open="settings" title="Scan settings" aria-label="Scan settings">'+icon('settings')+'</button><span id="scan-status" class="text-muted" style="font-size:12px"></span></div>'
-      +   '<div id="scan-results" style="display:flex;flex-direction:column;gap:6px"></div>'
+      +   '<p class="text-muted" style="font-size:12px;margin:0 0 var(--space-3)">Scans run in the <b>background</b> — start one and a progress bar shows what it’s checking while you keep using the app. Found ports that aren’t on your list appear with an <b>Add</b> button.</p>'
+      +   '<div class="scanmode"><div class="scanmode-h"><b>Smart scan</b><button class="btn btn-primary btn-sm" data-act="scan-smart">Start</button></div>'
+      +     '<p class="text-muted" style="font-size:12px;margin:6px 0 0">'+SMART_PORTS.length+' well-known dev &amp; self-hosted ports (Vite, Next, Immich, Nextcloud, NocoBase, Ollama, Jellyfin…) on '+hostTxt+'.</p>'
+      +     '<details style="margin-top:6px"><summary class="text-muted" style="font-size:12px;cursor:pointer">See the '+SMART_PORTS.length+' ports</summary><div class="smartlist">'+SMART_PORTS.map(function(p){ return '<span><code>'+p.port+'</code> '+esc(p.label)+'</span>'; }).join('')+'</div></details>'
+      +   '</div>'
+      +   '<div class="scanmode"><div class="scanmode-h"><b>Custom scan</b><button class="btn btn-secondary btn-sm" data-act="scan-custom">Start</button></div>'
+      +     '<p class="text-muted" style="font-size:12px;margin:6px 0 0">Your range from Settings — '+esc(c.from)+'→'+esc(c.to)+' step '+esc(c.step)+' plus extras ('+buildScanPorts().length+' ports). <a data-open="settings" style="cursor:pointer">Edit</a></p>'
+      +   '</div>'
+      +   '<div class="scanmode"><div class="scanmode-h"><b>Full scan</b><button class="btn btn-secondary btn-sm" data-act="scan-full">Start</button></div>'
+      +     '<p class="text-muted" style="font-size:12px;margin:6px 0 0">⚠ Every port <b>1–65535</b> on each host. Tens of thousands of checks — slow and heavy; best on <code>localhost</code> only.</p>'
+      +   '</div>'
       + '</div>'
       + '<div class="dialog-actions"><button class="btn btn-secondary" data-act="cancel">Close</button></div>'
       + '</div></div>');
   }
-  async function runScan(){
-    if (scanning) return;
-    scanning = true;
-    var results = document.getElementById('scan-results');
-    var statusEl = document.getElementById('scan-status');
-    var startBtn = document.querySelector('[data-act="scan-start"]');
-    if(startBtn) startBtn.disabled = true;
-    results.innerHTML=''; statusEl.textContent='Scanning…';
-    var hs = selectedHosts();
-    var have = {}; state.services.forEach(function(s){ have[s.port]=1; });
-    var found = 0;
-    function addFound(h,p){
-      var fk = h.id+'|'+p;
-      if(results.querySelector('[data-fk="'+cssEsc(fk)+'"]')) return;
-      found++;
-      var row=document.createElement('div');
-      row.setAttribute('data-fk',fk);
-      row.setAttribute('data-port',p);
-      row.style.cssText='display:flex;align-items:center;gap:10px';
-      row.innerHTML='<span class="dot up" style="width:9px;height:9px"></span><code style="flex:1">'+esc(baseUrl(h))+':'+p+'</code><button class="btn btn-secondary" data-act="add-found" data-port="'+p+'">Add</button>';
-      results.appendChild(row); refreshIcons();
-    }
-    if (DEMO){
-      var fake=[3300,8100,5174].filter(function(p){return !have[p];});
-      for (var hi=0; hi<hs.length; hi++){
-        for (var i=0;i<fake.length;i++){ if(!scanning) break; await sleep(400); addFound(hs[hi],fake[i]); }
+  function startScan(mode){
+    var hs=selectedHosts(); if(!hs.length) return;
+    if(scanState) scanState.running=false;                 // stop any current scan first
+    var ports = DEMO ? demoPorts() : scanPortsFor(mode);
+    var have={}; state.services.forEach(function(s){ have[s.port]=1; });
+    var queue=[]; hs.forEach(function(h){ ports.forEach(function(p){ queue.push({h:h,port:p.port,label:p.label||''}); }); });
+    var sc={ mode:mode, total:queue.length, done:0, found:[], running:true, current:'' };
+    scanState=sc; render();
+    var workers = mode==='full'?24:12, timeout = mode==='full'?1000:1600;
+    runScanQueue(sc, queue, have, workers, timeout);
+  }
+  async function runScanQueue(sc, queue, have, workers, timeout){
+    await Promise.all(Array.from({length:workers}).map(function(){ return (async function(){
+      while(queue.length && sc.running){
+        var t=queue.shift();
+        sc.current = baseUrl(t.h)+':'+t.port;
+        var ok;
+        if(DEMO){ await sleep(5); ok = !!DEMO_OPEN[t.port]; }
+        else ok = await pingUrl(baseUrl(t.h)+':'+t.port, timeout);
+        sc.done++;
+        if(ok && !have[t.port]){
+          var fk=t.h.id+'|'+t.port;
+          if(!sc.found.some(function(f){ return f.key===fk; })){
+            var f={ key:fk, hostId:t.h.id, base:baseUrl(t.h), port:t.port, label:t.label };
+            sc.found.push(f);
+            if(sc===scanState) appendFoundRow(f);
+          }
+        }
+        if(sc===scanState && (sc.done%17===0 || ok)) paintScanProgress();
       }
-    } else {
-      var queue = [];
-      hs.forEach(function(h){ buildScanPorts().forEach(function(p){ if(!have[p]) queue.push({h:h,p:p}); }); });
-      await Promise.all([0,0,0,0,0,0,0,0].map(async function(){
-        while(queue.length && scanning){ var t=queue.shift(); if(await pingUrl(baseUrl(t.h)+':'+t.p, 1800)) addFound(t.h,t.p); }
-      }));
-    }
-    scanning=false;
-    if(startBtn) startBtn.disabled=false;
-    statusEl.textContent = found ? (found+' found — not on your list') : 'Nothing new found.';
+    })(); }));
+    sc.running=false;
+    if(sc===scanState) paintScanProgress();
+  }
+  function scanPanelHTML(){
+    if(!scanState) return '';
+    var s=scanState, pct=s.total?Math.round(s.done/s.total*100):0;
+    var title = s.mode==='full'?'Full scan':(s.mode==='smart'?'Smart scan':'Custom scan');
+    return '<div class="scanpanel" id="scan-panel">'
+      + '<div class="scanpanel-h"><span class="scanpanel-title">'+title+'</span><span class="scanpanel-status" id="scan-stat">'+(s.running?'Scanning…':'Done')+'</span>'
+      +   '<button class="btn btn-ghost btn-icon" data-act="scan-close" title="'+(s.running?'Stop scan':'Dismiss')+'" aria-label="'+(s.running?'Stop scan':'Dismiss')+'">'+icon('del')+'</button></div>'
+      + '<div class="scanbar"><div class="scanbar-fill" id="scan-fill" style="width:'+pct+'%"></div></div>'
+      + '<div class="scanpanel-meta"><span id="scan-cur">'+esc(s.current||'')+'</span><span id="scan-count">'+s.done+' / '+s.total+' · '+s.found.length+' found</span></div>'
+      + '<div class="scan-found" id="scan-found">'+s.found.map(foundRowHTML).join('')+'</div>'
+      + '</div>';
+  }
+  function foundRowHTML(f){
+    return '<div class="scan-foundrow" data-fport="'+f.port+'"><span class="dot up"></span><code>'+esc(f.base)+':'+f.port+'</code>'+(f.label?'<span class="scan-lbl">'+esc(f.label)+'</span>':'')+'<button class="btn btn-secondary btn-sm" data-act="add-found" data-port="'+f.port+'">Add</button></div>';
+  }
+  function appendFoundRow(f){ var c=document.getElementById('scan-found'); if(!c) return; c.insertAdjacentHTML('beforeend', foundRowHTML(f)); paintScanProgress(); refreshIcons(); }
+  function paintScanProgress(){
+    if(!scanState) return; var s=scanState;
+    var fill=document.getElementById('scan-fill'); if(fill) fill.style.width=(s.total?Math.round(s.done/s.total*100):0)+'%';
+    var cur=document.getElementById('scan-cur'); if(cur) cur.textContent=s.current||'';
+    var cnt=document.getElementById('scan-count'); if(cnt) cnt.textContent=s.done+' / '+s.total+' · '+s.found.length+' found';
+    var st=document.getElementById('scan-stat'); if(st) st.textContent=s.running?'Scanning…':'Done';
   }
 
   // ---- settings ----
@@ -700,12 +786,16 @@
     else if (act==='del-dialog'){ if(editingId && confirm('Delete this server?')){ deleteService(editingId); closeModal(); } }
     else if (act==='del-host'){ var hr=actEl.closest('.hostrow'); if(hr && state.hosts.length>1){ var hid=hr.dataset.hid; state.hosts=state.hosts.filter(function(x){return x.id!==hid;}); state.selectedHostIds=state.selectedHostIds.filter(function(x){return x!==hid;}); if(!state.selectedHostIds.length) state.selectedHostIds=[state.hosts[0].id]; save(); refreshHosts(); pingAll(); } }
     else if (act==='add-host'){ var lbl=val('h-label').trim(), hst=val('h-host').trim().replace(/^https?:\/\//,'').replace(/\/.*$/,''); if(!hst) { document.getElementById('h-host').focus(); return; } var nh={id:uid(),label:lbl||hst,host:hst,scheme:'http'}; state.hosts.push(nh); state.selectedHostIds.push(nh.id); save(); refreshHosts(); pingAll(); document.getElementById('h-label').value=''; document.getElementById('h-host').value=''; }
-    else if (act==='scan-start'){ runScan(); }
+    else if (act==='scan-smart'){ closeModal(); startScan('smart'); }
+    else if (act==='scan-custom'){ closeModal(); startScan('custom'); }
+    else if (act==='scan-full'){ if(confirm('Full scan checks all 65,535 ports on each selected host — this can take a while and is heavy on your machine. Continue?')){ closeModal(); startScan('full'); } }
+    else if (act==='scan-close'){ if(scanState){ scanState.running=false; scanState=null; render(); } }
+    else if (act==='banner-x'){ bannerDismissed=true; render(); }
     else if (act==='save-settings'){ state.scanConfig = readSettingsForm(); save(); startChecks(); closeModal(); }
     else if (act==='reset-settings'){ state.scanConfig = defaultScanConfig(); save(); startChecks(); openSettings(); }
     else if (act==='copy-export'){ var tx=document.getElementById('ex-code'); if(tx){ tx.select(); if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(tx.value).catch(function(){}); else { try{document.execCommand('copy');}catch(_){} } var ob=actEl.textContent; actEl.textContent='Copied!'; setTimeout(function(){ actEl.textContent=ob; },1200); } }
     else if (act==='do-import'){ var im=document.getElementById('im-code'), msg=document.getElementById('im-msg'); var code=im?im.value:''; if(!confirm('Replace all current hosts and settings with the pasted code?')) return; importCode(code).then(function(){ closeModal(); }).catch(function(err){ if(msg){ msg.textContent='Could not import — '+err.message+'.'; msg.style.color='var(--color-accent)'; } }); }
-    else if (act==='add-found'){ var p=parseInt(actEl.getAttribute('data-port'),10); if(!state.services.some(function(s){return s.port===p;})) saveService(null,'Port '+p,p); var rr=document.getElementById('scan-results'); if(rr) rr.querySelectorAll('[data-port="'+p+'"]').forEach(function(el){ el.remove(); }); }
+    else if (act==='add-found'){ var p=parseInt(actEl.getAttribute('data-port'),10); if(scanState) scanState.found=scanState.found.filter(function(f){ return f.port!==p; }); if(!state.services.some(function(s){return s.port===p;})) saveService(null,'Port '+p,p); else render(); }
   });
 
   document.addEventListener('change', function(e){
