@@ -26,7 +26,7 @@
   html,body{margin:0;height:100%}
   body{background:var(--color-bg);color:var(--color-text);font-family:var(--font-body);-webkit-font-smoothing:antialiased}
   code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.9em}
-  .wrap{max-width:900px;margin:0 auto;padding:var(--space-6) var(--space-6) var(--space-8);min-height:100%;display:flex;flex-direction:column}
+  .wrap{max-width:none;margin:0 auto;padding:var(--space-6) var(--space-6) var(--space-8);min-height:100%;display:flex;flex-direction:column}
   @keyframes pulse{0%,100%{opacity:1}50%{opacity:.25}}
 
   /* ---- toolbar ---- */
@@ -79,6 +79,13 @@
   .theme-modernist .hostgrp-h{border-bottom:2px solid var(--color-divider);font-weight:800;padding-left:2px}
   .theme-modernist .hostgrp-name{color:var(--color-accent)}
   .theme-modernist .hostgrp .list{border-top:0}
+
+  /* ---- host columns (one per selected host, side by side, full width) ---- */
+  .hostcols{display:flex;flex-wrap:nowrap;gap:var(--space-4);align-items:flex-start;overflow-x:auto;padding-bottom:var(--space-2)}
+  .hostcols .hostgrp{flex:1 1 340px;min-width:300px;margin-bottom:0}
+  .svc-off{opacity:.5}
+  .svc-off:hover{opacity:.85}
+  .theme-modernist .hostcols .list{grid-template-columns:1fr}
 
   /* ---- host picker (checkboxes in the Hosts dialog) ---- */
   .selall{display:flex;align-items:center;gap:10px;padding:0 0 var(--space-2);margin-bottom:var(--space-2);border-bottom:1px solid var(--color-divider);font-size:13px;font-weight:600;cursor:pointer}
@@ -182,6 +189,7 @@
   function migrate(){
     if(!state.scanConfig){ state.scanConfig = defaultScanConfig(); }
     if(state.scanConfig.interval==null) state.scanConfig.interval = 5;
+    if(typeof state.showOffline!=='boolean') state.showOffline = false;
     // Older versions tracked a single activeHostId; carry it into the new multi-select.
     if(!Array.isArray(state.selectedHostIds)){
       state.selectedHostIds = state.activeHostId ? [state.activeHostId] : state.hosts.map(function(h){return h.id;});
@@ -243,6 +251,7 @@
       + '<button class="btn btn-secondary" data-open="hosts">'+icon('hosts')+'<span>Hosts · '+selectedHosts().length+'/'+state.hosts.length+'</span></button>'
       + '<label class="search"><span class="si">'+icon('search')+'</span><input class="input" id="search" placeholder="Filter" value="'+esc(searchQ)+'" aria-label="Filter servers"></label>'
       + '<span class="spacer"></span>'
+      + '<button class="btn '+(state.showOffline?'btn-primary':'btn-secondary')+'" data-act="toggle-offline" title="Show or hide offline servers"><span>'+(state.showOffline?'Hide offline':'Show offline')+'</span></button>'
       + '<button class="btn btn-secondary" data-open="scan">'+icon('scan')+'<span>Scan</span></button>'
       + '<button class="btn btn-secondary btn-icon" data-open="settings" title="Scan settings" aria-label="Scan settings">'+icon('settings')+'</button>'
       + '<button class="btn btn-secondary btn-icon" data-refresh title="Re-check now" aria-label="Re-check now">'+icon('refresh')+'</button>'
@@ -256,23 +265,29 @@
   }
   // Signature over every host×service pair, so we only reorder/re-render when an
   // up/down flips — not on every re-check (that was the flicker).
+  // Encodes each host×service status (u/d/c), so we re-render whenever a status
+  // flips — which is exactly when a row needs to appear or disappear from a host.
   function groupSig(){
     var items = currentItems();
     return selectedHosts().map(function(h){
-      return h.id+'#'+items.map(function(s){ return s.id+(statusOf(h.id,s)==='up'?'1':'0'); }).join(',');
+      return h.id+'#'+items.map(function(s){ return s.id+statusOf(h.id,s).charAt(0); }).join(',');
     }).join(';');
   }
   function hostSection(h, items){
-    var known = items.some(function(s){ var st=statusOf(h.id,s); return st==='up'||st==='down'; });
-    var arr = items.slice();
-    if(known){
-      // Live servers rise to the top, offline ones drop below (stable within each band).
-      arr.sort(function(a,b){ return (statusOf(h.id,a)==='up'?0:1) - (statusOf(h.id,b)==='up'?0:1); });
-    }
-    var live = arr.filter(function(s){ return statusOf(h.id,s)==='up'; }).length;
+    // Per host, show the servers reachable there (live) at the top, then any still
+    // being checked. Offline servers are hidden unless "Show offline" is on, in which
+    // case they sit dimmed at the bottom — a server that isn't running on this host
+    // is never listed as "off" in the normal view.
+    var online = items.filter(function(s){ return statusOf(h.id,s)==='up'; });
+    var checking = items.filter(function(s){ return statusOf(h.id,s)==='checking'; });
+    var offline = state.showOffline ? items.filter(function(s){ return statusOf(h.id,s)==='down'; }) : [];
+    var shown = online.concat(checking, offline);
+    var body = shown.length
+      ? '<ul class="list">'+shown.map(function(s){ return svcHTML(h,s); }).join('')+'</ul>'
+      : '<p class="text-muted" style="font-size:12px;padding:4px 4px 0;margin:0">Nothing live on this host right now.</p>';
     return '<div class="hostgrp" data-host="'+h.id+'">'
-      + '<div class="hostgrp-h"><span class="hostgrp-name">'+esc(h.label)+'</span><span class="hostgrp-base">'+esc(baseUrl(h))+'</span><span class="hostgrp-live">'+live+'/'+arr.length+' live</span></div>'
-      + '<ul class="list">'+arr.map(function(s){ return svcHTML(h,s); }).join('')+'</ul>'
+      + '<div class="hostgrp-h"><span class="hostgrp-name">'+esc(h.label)+'</span><span class="hostgrp-base">'+esc(baseUrl(h))+'</span><span class="hostgrp-live">'+online.length+' live</span></div>'
+      + body
       + '</div>';
   }
   function renderList(){
@@ -283,18 +298,24 @@
     if(!hs.length){ region.innerHTML = '<div class="empty"><h3>No hosts selected</h3><p class="text-muted">Open <b>Hosts</b> and check at least one host to show your servers.</p></div>'; lastGroupSig=''; refreshIcons(); return; }
     var items = currentItems();
     if(!items.length){ region.innerHTML = '<div class="empty"><h3>No matches</h3><p class="text-muted">Nothing matches “'+esc(searchQ)+'”.</p></div>'; lastGroupSig=''; refreshIcons(); return; }
-    region.innerHTML = hs.map(function(h){ return hostSection(h, items); }).join('');
+    // Hosts with live servers sit on the left; hosts with none sort to the right.
+    var ordered = hs.map(function(h,i){ return {h:h,i:i,on:onlineCount(h,items)}; })
+      .sort(function(a,b){ return (b.on>0?1:0)-(a.on>0?1:0) || a.i-b.i; })
+      .map(function(x){ return x.h; });
+    region.innerHTML = '<div class="hostcols">'+ordered.map(function(h){ return hostSection(h, items); }).join('')+'</div>';
     lastGroupSig = groupSig();
     refreshIcons();
     paintStatus();
   }
+  function onlineCount(h, items){ return items.filter(function(s){ return statusOf(h.id,s)==='up'; }).length; }
   function svcHTML(h,s){
     var url = svcUrl(h,s);
     var initial = ((s.name||'').trim()[0]||'#').toUpperCase();
     // Favicon only in real (local) use — in demo/preview these point at http://localhost
     // with no server behind them, and the pending requests just stall the page.
     var fav = DEMO ? '' : '<img src="'+esc(url)+'/favicon.ico" alt="" loading="lazy" onload="this.style.opacity=1" onerror="this.remove()">';
-    return '<li class="svc" data-id="'+s.id+'" data-host="'+h.id+'">'
+    var st = statusOf(h.id,s);
+    return '<li class="svc'+(st==='down'?' svc-off':'')+'" data-id="'+s.id+'" data-host="'+h.id+'">'
       + '<span class="grip" draggable="true" title="Drag to reorder" aria-hidden="true">'+icon('drag')+'</span>'
       + '<a class="svc-hit" href="'+esc(url)+'" target="_blank" rel="noopener" draggable="false">'
       +   '<span class="logo">'+esc(initial)+fav+'</span>'
@@ -554,6 +575,7 @@
     if (!actEl) return;
     var act = actEl.getAttribute('data-act');
     if (act==='cancel'){ closeModal(); }
+    else if (act==='toggle-offline'){ state.showOffline=!state.showOffline; save(); render(); }
     else if (act==='edit'){ var li=actEl.closest('.svc'); if(li) openEdit(li.dataset.id); }
     else if (act==='del'){ var li2=actEl.closest('.svc'); if(li2){ var s=getSvc(li2.dataset.id); if(confirm('Remove “'+(s?s.name:'')+'”?')) deleteService(li2.dataset.id); } }
     else if (act==='del-dialog'){ if(editingId && confirm('Delete this server?')){ deleteService(editingId); closeModal(); } }
