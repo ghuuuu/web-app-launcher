@@ -6,8 +6,7 @@ A single-page launcher / front page for the local dev servers you keep coming ba
 
 | File | What it is |
 | --- | --- |
-| `index.html` | Landing page — previews the app with sample data in a browser-chrome frame. |
-| `launcher.html` | **The app.** Open this to use it for real; it starts empty and remembers your servers in this browser. |
+| `launcher.html` | **The app.** Open this to use it; it starts empty and remembers your servers in this browser. |
 | `modernist.css` | Modernist theme (default) — Archivo, hard edges, red accent. |
 | `broadsheet.css` | Broadsheet theme — Source Serif, newspaper masthead, cyan accent. |
 
