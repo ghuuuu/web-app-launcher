@@ -58,6 +58,10 @@ launcher.html?theme=broadsheet
 - Icons (Lucide / Phosphor) and fonts (Google Fonts) load from CDNs; offline, the app still works with fallback glyphs and system fonts.
 - Live checks and scanning use no-CORS `fetch` pings, so a server counts as "up" if it answers at all — the launcher never reads its response.
 
+## License
+
+[MIT](LICENSE) © Gerald Untario
+
 ## Changelog
 
 ### 0.1.0
