@@ -49,7 +49,7 @@
 
   /* ---- list / service item ---- */
   .list{list-style:none;margin:0;padding:0}
-  .svc{position:relative}
+  .svc{position:relative;min-width:0}
   .svc-hit{display:flex;align-items:center;gap:var(--space-3);text-decoration:none;color:inherit;padding:14px 104px 14px 24px}
   .grip{position:absolute;left:0;top:0;bottom:0;width:22px;display:flex;align-items:center;justify-content:center;cursor:grab;opacity:.22;transition:opacity .15s;touch-action:none}
   .svc:hover .grip{opacity:.6}
@@ -60,7 +60,7 @@
   .logo img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;opacity:0;transition:opacity .2s}
   .svc-main{display:flex;flex-direction:column;min-width:0;flex:1;gap:1px}
   .svc-name{font-family:var(--font-heading);font-weight:var(--font-heading-weight);line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .svc-url{font-size:12px;opacity:.6;font-variant-numeric:tabular-nums}
+  .svc-url{font-size:12px;opacity:.6;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
   .status{display:inline-flex;align-items:center;gap:6px;font-size:10px;letter-spacing:.11em;text-transform:uppercase;flex:none;opacity:.55}
   .status.up{opacity:1}
   .dot{width:9px;height:9px;flex:none;display:inline-block}
@@ -79,9 +79,9 @@
   /* ---- host group (one section per selected host) ---- */
   .hostgrp{margin-bottom:var(--space-6)}
   .hostgrp:last-of-type{margin-bottom:0}
-  .hostgrp-h{display:flex;align-items:baseline;gap:10px;padding:0 0 var(--space-2) 4px}
-  .hostgrp-name{font-family:var(--font-heading);font-weight:var(--font-heading-weight);text-transform:uppercase;letter-spacing:.11em;font-size:12px}
-  .hostgrp-base{font-size:12px;opacity:.55;font-variant-numeric:tabular-nums}
+  .hostgrp-h{display:flex;align-items:baseline;gap:10px;padding:0 0 var(--space-2) 4px;min-width:0}
+  .hostgrp-name{font-family:var(--font-heading);font-weight:var(--font-heading-weight);text-transform:uppercase;letter-spacing:.11em;font-size:12px;flex:none}
+  .hostgrp-base{font-size:12px;opacity:.55;font-variant-numeric:tabular-nums;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .hostgrp-live{margin-left:auto;font-size:11px;letter-spacing:.1em;text-transform:uppercase;opacity:.55;font-variant-numeric:tabular-nums}
   .theme-broadsheet .hostgrp-name{color:var(--color-accent-700)}
   .theme-modernist .hostgrp-h{border-bottom:2px solid var(--color-divider);font-weight:800;padding-left:2px}
