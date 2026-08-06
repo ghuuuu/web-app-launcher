@@ -98,7 +98,8 @@ index.html?theme=broadsheet
 ## Changelog
 
 ### Unreleased
-- Fix: long server names/URLs no longer make a row spill past its host column (content truncates within the column).
+- Fix: long server names/URLs no longer make a row spill past its host column.
+- Row actions (rename / delete) are now a compact vertical stack pinned to the right, and server names wrap onto multiple lines — leaving much more room for the name.
 
 ### 0.3.2
 - **Portable single-file build** (`web-app-launcher.html`) with the CSS inlined — download and open it locally so localhost checks and scans actually work.
