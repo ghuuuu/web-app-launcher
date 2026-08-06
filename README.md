@@ -1,6 +1,6 @@
 # Web App Launcher
 
-![version](https://img.shields.io/badge/version-0.3.0-ec3013) ![no build](https://img.shields.io/badge/build-none-232019) ![PWA](https://img.shields.io/badge/PWA-installable-2d6cdf) ![storage](https://img.shields.io/badge/storage-localStorage-6b655c)
+![version](https://img.shields.io/badge/version-0.3.1-ec3013) ![no build](https://img.shields.io/badge/build-none-232019) ![PWA](https://img.shields.io/badge/PWA-installable-2d6cdf) ![storage](https://img.shields.io/badge/storage-localStorage-6b655c)
 
 A front page for the local dev servers you keep coming back to. Add the ports you run, see which are live at a glance, and jump to any of them in a click. One HTML file, no backend, no build step — everything is stored in your browser.
 
@@ -13,7 +13,9 @@ A front page for the local dev servers you keep coming back to. Add the ports yo
 - **Installable (PWA)** — add it to your home screen / dock and it opens like a native app, and loads offline.
 - **Mobile-friendly** — on small screens hosts collapse to tabs (swipe or tap between them); everything stays touch-sized.
 - **Export / import** — copy a short code and paste it into the app in another browser to carry your hosts and settings across.
+- **Tags** — label servers (frontend / api / db…), see them as chips, and filter the list by tag.
 - **Dark mode** — follows your system light/dark preference automatically.
+- **Accessible** — reduced-motion support, keyboard focus trapping in dialogs, and text labels alongside every status dot.
 - **Configurable** — set the scan range, extra ports, and how often live status re-checks (in seconds), under **Settings**.
 - **Drag to reorder** (mouse or touch), filter by name or port, and two visual themes.
 - **Private by design** — no accounts, no server, no telemetry. State lives in `localStorage` in your browser.
@@ -48,6 +50,7 @@ Open **Export / Import** (the ⤒ button in the toolbar), **Copy code**, then pa
 | **Scan** | Smart / Custom / Full port scan across every selected host, in the background with a progress bar. |
 | **Show offline** | Reveal servers that aren't live on a host (dimmed, at the bottom); off by default. |
 | **Settings** | Scan range (`from` / `to` / `step`), extra ports, and the live re-check interval. |
+| **Tags** | Add comma-separated tags when editing a server; filter by them from the tag bar. |
 | **Export / Import** | Copy a code to move hosts + settings to another browser, or paste one to import. |
 | **Filter** | Narrow the list by server name or port. |
 | **Re-check now** | Ping everything immediately instead of waiting for the next interval. |
@@ -83,6 +86,13 @@ index.html?theme=broadsheet
 [MIT](LICENSE) © Gerald Untario
 
 ## Changelog
+
+### 0.3.1
+- **Edit hosts** inline (rename / change address) in the Hosts panel.
+- **Tags** — give servers tags, see them as chips, and filter by tag from a tag bar.
+- **Accessibility** — modal focus trap + focus return, tab roles/labels, status dots always paired with text, and `prefers-reduced-motion` support.
+- **Smarter Full scan** — ports generated lazily (no memory spike) with shorter timeouts on localhost and a heads-up for slow remote hosts.
+- The background **scan panel** is isolated from re-renders, so long scans stay smooth.
 
 ### 0.3.0
 - **Scan modes** — Smart (70+ known dev/self-hosted ports), Custom, and Full (1–65535), each running in the background with a live progress bar and current-port readout.

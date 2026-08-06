@@ -130,6 +130,36 @@
   .scan-foundrow .dot{width:9px;height:9px}
   .scan-lbl{font-size:11px;opacity:.6;white-space:nowrap}
 
+  .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+
+  /* Scan panel docked at the bottom, in its own container so main re-renders
+     never rebuild it (keeps the found-list scroll and progress steady). */
+  #scan-region{position:sticky;bottom:12px;z-index:60;margin-top:var(--space-4)}
+  #scan-region:empty{display:none}
+  #scan-region .scanpanel{margin:0;box-shadow:var(--shadow-lg)}
+
+  /* ---- tags ---- */
+  .tagbar{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 var(--space-4)}
+  .tagpill{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;font-size:12px;line-height:1.2;cursor:pointer;background:transparent;color:inherit;border:1px solid var(--color-divider);border-radius:var(--radius-md);font-family:inherit}
+  .tagpill:hover{background:color-mix(in srgb,var(--color-text) 6%,transparent)}
+  .tagpill.active{background:var(--color-accent);color:var(--color-bg);border-color:var(--color-accent)}
+  .tagpill-n{font-variant-numeric:tabular-nums;opacity:.6}
+  .tagpill.active .tagpill-n{opacity:.85}
+  .tagpill-clear{opacity:.7}
+  .svc-tags{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px}
+  .svc-tags .tag{font-size:10px;padding:1px 7px}
+
+  /* ---- editable host rows ---- */
+  .hostrow-fields{flex:1;min-width:0;display:grid;grid-template-columns:1fr 1fr;gap:6px}
+  .hostrow-fields .input{min-height:32px}
+  @media (max-width:680px){ .hostrow-fields{grid-template-columns:1fr} }
+
+  /* Honour reduced-motion: drop the status pulse and incidental transitions. */
+  @media (prefers-reduced-motion: reduce){
+    .dot.checking{animation:none}
+    .scanbar-fill,.svc-hit,.logo img,.svc-actions,.grip,.hosttab,.tagpill,.btn{transition:none}
+  }
+
   /* Touch devices have no hover — keep the row actions and drag grip visible. */
   @media (hover:none){
     .svc-actions{opacity:1}
@@ -203,6 +233,7 @@
   <template id="__bundler_thumbnail"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" fill="#ec3013"/><text x="50" y="52" font-family="Archivo,system-ui,sans-serif" font-size="33" font-weight="800" fill="#f3f2f2" text-anchor="middle" dominant-baseline="central" letter-spacing="-1">WA</text></svg></template>
   <div class="wrap">
     <div id="app"></div>
+    <div id="scan-region" aria-live="polite"></div>
   </div>
   <div id="modal"></div>
 
@@ -229,6 +260,7 @@
   var bannerDismissed = false;
   var activeTabHostId = null;                            // which host's tab is open (mobile)
   var tabPinned = false;                                 // true once the user taps a tab this session
+  var activeTag = null;                                  // active tag filter (null = show all)
   var mqMobile = window.matchMedia('(max-width: 680px)');
   function isMobile(){ return mqMobile.matches; }
 
@@ -264,6 +296,7 @@
     }
     state.selectedHostIds = state.selectedHostIds.filter(function(id){ return state.hosts.some(function(h){return h.id===id;}); });
     if(!state.selectedHostIds.length && state.hosts.length) state.selectedHostIds = [state.hosts[0].id];
+    state.services.forEach(function(s){ if(!Array.isArray(s.tags)) s.tags = []; });
     save();
   }
 
@@ -277,6 +310,8 @@
   function baseUrl(h){ return (h.scheme||'http') + '://' + h.host; }
   function svcUrl(h,s){ return baseUrl(h) + ':' + s.port; }
   function getSvc(id){ return state.services.find(function(s){return s.id===id;}); }
+  function hostById(id){ return state.hosts.find(function(h){return h.id===id;}); }
+  function parseTags(v){ return (v||'').split(',').map(function(t){ return t.trim(); }).filter(Boolean); }
   function stKey(hid,sid){ return hid + '|' + sid; }
   function statusOf(hid,s){ return DEMO ? (s.st||'down') : (statusMap[stKey(hid,s.id)]||'checking'); }
   function liveCount(){ var hs=selectedHosts(); return state.services.filter(function(s){ return hs.some(function(h){ return statusOf(h.id,s)==='up'; }); }).length; }
@@ -293,9 +328,18 @@
 
   // ---- render ----
   function render(){
-    app.innerHTML = bannerHTML() + headerHTML() + toolbarHTML() + scanPanelHTML() + '<div id="list-region"></div>' + footerHTML();
+    app.innerHTML = bannerHTML() + headerHTML() + toolbarHTML() + tagBarHTML() + '<div id="list-region"></div>' + footerHTML();
     renderList();
     refreshIcons();
+  }
+  function allTags(){ var m={}; state.services.forEach(function(s){ (s.tags||[]).forEach(function(t){ t=String(t); if(t) m[t]=(m[t]||0)+1; }); }); return m; }
+  function tagBarHTML(){
+    var m=allTags(), keys=Object.keys(m).sort(function(a,b){ return a.toLowerCase()<b.toLowerCase()?-1:1; });
+    if(!keys.length){ if(activeTag) activeTag=null; return ''; }
+    return '<div class="tagbar" role="group" aria-label="Filter by tag">'
+      + keys.map(function(t){ var on=activeTag&&activeTag.toLowerCase()===t.toLowerCase(); return '<button class="tagpill'+(on?' active':'')+'" data-tagfilter="'+esc(t)+'" aria-pressed="'+(on?'true':'false')+'">'+esc(t)+' <span class="tagpill-n">'+m[t]+'</span></button>'; }).join('')
+      + (activeTag?'<button class="tagpill tagpill-clear" data-tagclear>clear</button>':'')
+      + '</div>';
   }
   function showHttpsWarning(){ return location.protocol==='https:' && !bannerDismissed && selectedHosts().some(function(h){ return (h.scheme||'http')==='http'; }); }
   function bannerHTML(){
@@ -338,7 +382,11 @@
   var lastGroupSig = '';
   function currentItems(){
     var q = searchQ.trim().toLowerCase();
-    return state.services.filter(function(s){ return !q || s.name.toLowerCase().indexOf(q)>=0 || String(s.port).indexOf(q)>=0; });
+    return state.services.filter(function(s){
+      if(activeTag && !(s.tags||[]).some(function(t){ return String(t).toLowerCase()===activeTag.toLowerCase(); })) return false;
+      if(!q) return true;
+      return s.name.toLowerCase().indexOf(q)>=0 || String(s.port).indexOf(q)>=0 || (s.tags||[]).some(function(t){ return String(t).toLowerCase().indexOf(q)>=0; });
+    });
   }
   // Signature over every host×service pair, so we only reorder/re-render when an
   // up/down flips — not on every re-check (that was the flicker).
@@ -402,9 +450,9 @@
     return ordered.find(function(h){ return h.id===activeTabHostId; });
   }
   function tabsHTML(ordered, items){
-    return '<div class="hosttabs">'+ordered.map(function(h){
-      var on = onlineCount(h, items);
-      return '<button class="hosttab'+(h.id===activeTabHostId?' active':'')+'" data-tab="'+h.id+'">'+esc(h.label)+'<span class="hosttab-n">'+on+'</span></button>';
+    return '<div class="hosttabs" role="tablist">'+ordered.map(function(h){
+      var on = onlineCount(h, items), sel = h.id===activeTabHostId;
+      return '<button class="hosttab'+(sel?' active':'')+'" data-tab="'+h.id+'" role="tab" aria-selected="'+(sel?'true':'false')+'" aria-label="'+esc(h.label)+', '+on+' live">'+esc(h.label)+'<span class="hosttab-n" aria-hidden="true">'+on+'</span></button>';
     }).join('')+'</div>';
   }
   function svcHTML(h,s){
@@ -418,8 +466,8 @@
       + '<span class="grip" draggable="false" title="Drag to reorder" aria-hidden="true">'+icon('drag')+'</span>'
       + '<a class="svc-hit" href="'+esc(url)+'" target="_blank" rel="noopener" draggable="false">'
       +   '<span class="logo">'+esc(initial)+fav+'</span>'
-      +   '<span class="svc-main"><span class="svc-name">'+esc(s.name)+'</span><span class="svc-url">'+esc(h.host)+':'+s.port+'</span></span>'
-      +   '<span class="status" data-status="'+esc(stKey(h.id,s.id))+'"><span class="dot"></span><span class="stlabel"></span></span>'
+      +   '<span class="svc-main"><span class="svc-name">'+esc(s.name)+'</span><span class="svc-url">'+esc(h.host)+':'+s.port+'</span>'+(s.tags&&s.tags.length?('<span class="svc-tags">'+s.tags.map(function(t){ return '<span class="tag tag-neutral">'+esc(t)+'</span>'; }).join('')+'</span>'):'')+'</span>'
+      +   '<span class="status" data-status="'+esc(stKey(h.id,s.id))+'"><span class="dot" aria-hidden="true"></span><span class="stlabel"></span></span>'
       + '</a>'
       + '<div class="svc-actions">'
       +   '<button class="btn btn-ghost btn-icon" data-act="edit" title="Edit" aria-label="Edit">'+icon('edit')+'</button>'
@@ -490,11 +538,12 @@
   }
 
   // ---- mutations ----
-  function saveService(id, name, port){
+  function saveService(id, name, port, tags){
     name = (name||'').trim();
     if(!name) name = 'Port '+port;
-    if(id){ var s=getSvc(id); if(s){ s.name=name; s.port=port; } }
-    else { var ns={id:uid(),name:name,port:port}; if(DEMO) ns.st='checking'; state.services.push(ns); }
+    tags = Array.isArray(tags) ? tags : [];
+    if(id){ var s=getSvc(id); if(s){ s.name=name; s.port=port; s.tags=tags; } }
+    else { var ns={id:uid(),name:name,port:port,tags:tags}; if(DEMO) ns.st='checking'; state.services.push(ns); }
     save(); render(); pingAll();
   }
   function deleteService(id){ state.services = state.services.filter(function(s){return s.id!==id;}); save(); render(); }
@@ -505,8 +554,16 @@
   }
 
   // ---- modal ----
-  function openModal(html){ modal.innerHTML=html; refreshIcons(); }
-  function closeModal(){ modal.innerHTML=''; editingId=null; scanning=false; }
+  var lastFocus = null;
+  function openModal(html){
+    lastFocus = document.activeElement;
+    modal.innerHTML=html; refreshIcons();
+    var d = modal.querySelector('.dialog');
+    if(d){ d.setAttribute('role','dialog'); d.setAttribute('aria-modal','true'); d.tabIndex=-1;
+      setTimeout(function(){ var f=modal.querySelector('input:not([type=hidden]),select,textarea,button,a[href],[tabindex]:not([tabindex="-1"])'); (f||d).focus(); },30);
+    }
+  }
+  function closeModal(){ modal.innerHTML=''; editingId=null; scanning=false; if(lastFocus&&lastFocus.focus){ try{ lastFocus.focus(); }catch(_){} } lastFocus=null; }
 
   function openEdit(id){
     editingId = id;
@@ -518,6 +575,7 @@
       + '<div class="dialog-body" style="display:flex;flex-direction:column;gap:var(--space-3)">'
       +   '<div class="field"><label>Name <span class="text-muted">(optional)</span></label><input class="input" id="f-name" value="'+(s?esc(s.name):'')+'" placeholder="e.g. Web App"></div>'
       +   '<div class="field"><label>Port</label><input class="input" id="f-port" inputmode="numeric" value="'+(s?s.port:'')+'" placeholder="3000"></div>'
+      +   '<div class="field"><label>Tags <span class="text-muted">(comma-separated, optional)</span></label><input class="input" id="f-tags" value="'+(s&&s.tags?esc(s.tags.join(', ')):'')+'" placeholder="frontend, api"></div>'
       +   '<p class="text-muted" style="font-size:12px;margin:0">Opens <code>'+esc(baseUrl(primaryHost()))+':PORT</code>'+(nH>1?(' and '+(nH-1)+' more selected host'+(nH-1===1?'':'s')):'')+'. Type just a port to quick-add.</p>'
       + '</div>'
       + '<div class="dialog-actions">'
@@ -531,7 +589,7 @@
       e.preventDefault();
       var port = parseInt(val('f-port'),10);
       if(!port || port<1 || port>65535){ var pe=document.getElementById('f-port'); pe.focus(); pe.style.borderColor='var(--color-accent)'; return; }
-      saveService(id, val('f-name'), port);
+      saveService(id, val('f-name'), port, parseTags(val('f-tags')));
       closeModal();
     });
   }
@@ -559,8 +617,11 @@
       var checked = state.selectedHostIds.indexOf(h.id)>=0;
       return '<div class="hostrow hostpick" data-hid="'+h.id+'">'
         + '<input type="checkbox" data-act="toggle-host"'+(checked?' checked':'')+' aria-label="Show '+esc(h.label)+'">'
-        + '<div style="flex:1;min-width:0"><div style="font-family:var(--font-heading);font-weight:var(--font-heading-weight)">'+esc(h.label)+'</div><div class="text-muted" style="font-size:12px">'+esc(h.scheme)+'://'+esc(h.host)+'</div></div>'
-        + '<select class="input" data-act="scheme" style="width:auto;min-height:32px"><option'+(h.scheme==='http'?' selected':'')+'>http</option><option'+(h.scheme==='https'?' selected':'')+'>https</option></select>'
+        + '<div class="hostrow-fields">'
+        +   '<input class="input" data-act="host-label" value="'+esc(h.label)+'" placeholder="Label" aria-label="Host label">'
+        +   '<input class="input" data-act="host-host" value="'+esc(h.host)+'" placeholder="localhost or IP" aria-label="Host address">'
+        + '</div>'
+        + '<select class="input" data-act="scheme" style="width:auto;min-height:32px" aria-label="Scheme"><option'+(h.scheme==='http'?' selected':'')+'>http</option><option'+(h.scheme==='https'?' selected':'')+'>https</option></select>'
         + '<button class="btn btn-ghost btn-icon" data-act="del-host" title="Remove"'+(state.hosts.length<=1?' disabled':'')+' aria-label="Remove host">'+icon('del')+'</button>'
         + '</div>';
     }).join('');
@@ -615,25 +676,32 @@
       + '<div class="dialog-actions"><button class="btn btn-secondary" data-act="cancel">Close</button></div>'
       + '</div></div>');
   }
+  function isLocalHost(h){ return /^(localhost|127\.|0\.0\.0\.0|::1|\[::1\])/i.test((h.host||'').trim()); }
+  function timeoutFor(mode, h){ if(mode!=='full') return 1600; return isLocalHost(h) ? 700 : 1500; }
+  function buildQueueArray(hs, ports){ var q=[]; hs.forEach(function(h){ ports.forEach(function(p){ q.push({h:h,port:p.port,label:p.label||''}); }); }); return q; }
+  function mountScanPanel(){ var r=document.getElementById('scan-region'); if(!r) return; r.innerHTML = scanState ? scanPanelHTML() : ''; refreshIcons(); }
   function startScan(mode){
     var hs=selectedHosts(); if(!hs.length) return;
     if(scanState) scanState.running=false;                 // stop any current scan first
-    var ports = DEMO ? demoPorts() : scanPortsFor(mode);
     var have={}; state.services.forEach(function(s){ have[s.port]=1; });
-    var queue=[]; hs.forEach(function(h){ ports.forEach(function(p){ queue.push({h:h,port:p.port,label:p.label||''}); }); });
-    var sc={ mode:mode, total:queue.length, done:0, found:[], running:true, current:'' };
-    scanState=sc; render();
-    var workers = mode==='full'?24:12, timeout = mode==='full'?1000:1600;
-    runScanQueue(sc, queue, have, workers, timeout);
+    // Full scan generates ports lazily (65535 × hosts) rather than materialising a
+    // giant array; smart/custom queues are small so they stay plain arrays.
+    var next, total;
+    if(DEMO){ var dq=buildQueueArray(hs, demoPorts()); total=dq.length; next=function(){ return dq.shift()||null; }; }
+    else if(mode==='full'){ var hi=0, p=1; total=65535*hs.length; next=function(){ if(hi>=hs.length) return null; var t={h:hs[hi],port:p,label:''}; p++; if(p>65535){ p=1; hi++; } return t; }; }
+    else { var q=buildQueueArray(hs, scanPortsFor(mode)); total=q.length; next=function(){ return q.shift()||null; }; }
+    var sc={ mode:mode, total:total, done:0, found:[], running:true, current:'' };
+    scanState=sc; mountScanPanel();
+    runScanQueue(sc, next, have, mode==='full'?24:12);
   }
-  async function runScanQueue(sc, queue, have, workers, timeout){
+  async function runScanQueue(sc, next, have, workers){
     await Promise.all(Array.from({length:workers}).map(function(){ return (async function(){
-      while(queue.length && sc.running){
-        var t=queue.shift();
+      var t;
+      while(sc.running && (t=next())){
         sc.current = baseUrl(t.h)+':'+t.port;
         var ok;
         if(DEMO){ await sleep(5); ok = !!DEMO_OPEN[t.port]; }
-        else ok = await pingUrl(baseUrl(t.h)+':'+t.port, timeout);
+        else ok = await pingUrl(baseUrl(t.h)+':'+t.port, timeoutFor(sc.mode, t.h));
         sc.done++;
         if(ok && !have[t.port]){
           var fk=t.h.id+'|'+t.port;
@@ -643,7 +711,7 @@
             if(sc===scanState) appendFoundRow(f);
           }
         }
-        if(sc===scanState && (sc.done%17===0 || ok)) paintScanProgress();
+        if(sc===scanState && (sc.done%25===0 || ok)) paintScanProgress();
       }
     })(); }));
     sc.running=false;
@@ -662,9 +730,9 @@
       + '</div>';
   }
   function foundRowHTML(f){
-    return '<div class="scan-foundrow" data-fport="'+f.port+'"><span class="dot up"></span><code>'+esc(f.base)+':'+f.port+'</code>'+(f.label?'<span class="scan-lbl">'+esc(f.label)+'</span>':'')+'<button class="btn btn-secondary btn-sm" data-act="add-found" data-port="'+f.port+'">Add</button></div>';
+    return '<div class="scan-foundrow" data-fport="'+f.port+'"><span class="dot up" aria-hidden="true"></span><span class="sr-only">Responding: </span><code>'+esc(f.base)+':'+f.port+'</code>'+(f.label?'<span class="scan-lbl">'+esc(f.label)+'</span>':'')+'<button class="btn btn-secondary btn-sm" data-act="add-found" data-port="'+f.port+'">Add</button></div>';
   }
-  function appendFoundRow(f){ var c=document.getElementById('scan-found'); if(!c) return; c.insertAdjacentHTML('beforeend', foundRowHTML(f)); paintScanProgress(); refreshIcons(); }
+  function appendFoundRow(f){ var c=document.getElementById('scan-found'); if(!c) return; c.insertAdjacentHTML('beforeend', foundRowHTML(f)); paintScanProgress(); }  // found rows carry no icons — no refreshIcons needed
   function paintScanProgress(){
     if(!scanState) return; var s=scanState;
     var fill=document.getElementById('scan-fill'); if(fill) fill.style.width=(s.total?Math.round(s.done/s.total*100):0)+'%';
@@ -725,7 +793,7 @@
       h: state.hosts.map(function(h){ return [h.label,h.host,h.scheme||'http']; }),
       s: state.selectedHostIds.map(function(id){ return idx[id]; }).filter(function(i){ return i!=null; }),
       g: [c.from,c.to,c.step,(c.extra||[]),c.interval],
-      d: state.services.map(function(x){ return [x.name,x.port]; }),
+      d: state.services.map(function(x){ return (x.tags&&x.tags.length)?[x.name,x.port,x.tags]:[x.name,x.port]; }),
       o: state.showOffline?1:0 };
   }
   async function exportCode(){
@@ -745,7 +813,7 @@
     if(!selected.length) selected=[hosts[0].id];
     var g=d.g||[];
     var sc={from:parseInt(g[0],10)||3000,to:parseInt(g[1],10)||9000,step:parseInt(g[2],10)||100,extra:(g[3]||[]).map(Number).filter(function(x){return x>0;}),interval:parseInt(g[4],10)||5};
-    var services=(d.d||[]).map(function(t){ return {id:uid(),name:t[0]||('Port '+t[1]),port:parseInt(t[1],10)}; }).filter(function(x){ return x.port>0; });
+    var services=(d.d||[]).map(function(t){ return {id:uid(),name:t[0]||('Port '+t[1]),port:parseInt(t[1],10),tags:Array.isArray(t[2])?t[2]:[]}; }).filter(function(x){ return x.port>0; });
     state={hosts:hosts,selectedHostIds:selected,scanConfig:sc,services:services,showOffline:!!d.o};
     statusMap={}; activeTabHostId=null; tabPinned=false;
     save(); render(); pingAll(); startChecks();
@@ -775,6 +843,9 @@
     if (e.target.closest('[data-refresh]')){ pingAll(); return; }
     var tabBtn = e.target.closest('[data-tab]');
     if (tabBtn){ activeTabHostId = tabBtn.getAttribute('data-tab'); tabPinned = true; renderList(); return; }
+    var tagBtn = e.target.closest('[data-tagfilter]');
+    if (tagBtn){ var tg=tagBtn.getAttribute('data-tagfilter'); activeTag = (activeTag&&activeTag.toLowerCase()===tg.toLowerCase())?null:tg; render(); return; }
+    if (e.target.closest('[data-tagclear]')){ activeTag=null; render(); return; }
     if (e.target.closest('[data-backdrop]') === e.target){ closeModal(); return; }
 
     var actEl = e.target.closest('[data-act]');
@@ -789,14 +860,14 @@
     else if (act==='add-host'){ var lbl=val('h-label').trim(), hst=val('h-host').trim().replace(/^https?:\/\//,'').replace(/\/.*$/,''); if(!hst) { document.getElementById('h-host').focus(); return; } var nh={id:uid(),label:lbl||hst,host:hst,scheme:'http'}; state.hosts.push(nh); state.selectedHostIds.push(nh.id); save(); refreshHosts(); pingAll(); document.getElementById('h-label').value=''; document.getElementById('h-host').value=''; }
     else if (act==='scan-smart'){ closeModal(); startScan('smart'); }
     else if (act==='scan-custom'){ closeModal(); startScan('custom'); }
-    else if (act==='scan-full'){ if(confirm('Full scan checks all 65,535 ports on each selected host — this can take a while and is heavy on your machine. Continue?')){ closeModal(); startScan('full'); } }
-    else if (act==='scan-close'){ if(scanState){ scanState.running=false; scanState=null; render(); } }
+    else if (act==='scan-full'){ var remote=selectedHosts().some(function(h){ return !isLocalHost(h); }); if(confirm('Full scan checks all 65,535 ports on each selected host.'+(remote?' Non-localhost hosts can be very slow — closed ports time out.':'')+' Continue?')){ closeModal(); startScan('full'); } }
+    else if (act==='scan-close'){ if(scanState){ scanState.running=false; scanState=null; mountScanPanel(); } }
     else if (act==='banner-x'){ bannerDismissed=true; render(); }
     else if (act==='save-settings'){ state.scanConfig = readSettingsForm(); save(); startChecks(); closeModal(); }
     else if (act==='reset-settings'){ state.scanConfig = defaultScanConfig(); save(); startChecks(); openSettings(); }
     else if (act==='copy-export'){ var tx=document.getElementById('ex-code'); if(tx){ tx.select(); if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(tx.value).catch(function(){}); else { try{document.execCommand('copy');}catch(_){} } var ob=actEl.textContent; actEl.textContent='Copied!'; setTimeout(function(){ actEl.textContent=ob; },1200); } }
     else if (act==='do-import'){ var im=document.getElementById('im-code'), msg=document.getElementById('im-msg'); var code=im?im.value:''; if(!confirm('Replace all current hosts and settings with the pasted code?')) return; importCode(code).then(function(){ closeModal(); }).catch(function(err){ if(msg){ msg.textContent='Could not import — '+err.message+'.'; msg.style.color='var(--color-accent)'; } }); }
-    else if (act==='add-found'){ var p=parseInt(actEl.getAttribute('data-port'),10); if(scanState) scanState.found=scanState.found.filter(function(f){ return f.port!==p; }); if(!state.services.some(function(s){return s.port===p;})) saveService(null,'Port '+p,p); else render(); }
+    else if (act==='add-found'){ var p=parseInt(actEl.getAttribute('data-port'),10); if(scanState){ scanState.found=scanState.found.filter(function(f){ return f.port!==p; }); } if(!state.services.some(function(s){return s.port===p;})) saveService(null,'Port '+p,p); else render(); var reg=document.getElementById('scan-region'); if(reg){ reg.querySelectorAll('[data-fport="'+p+'"]').forEach(function(el){ el.remove(); }); } paintScanProgress(); }
   });
 
   document.addEventListener('change', function(e){
@@ -812,14 +883,26 @@
       state.selectedHostIds = e.target.checked ? state.hosts.map(function(h){return h.id;}) : [];
       save(); refreshHosts(); pingAll(); return;
     }
+    if (e.target.matches('[data-act="host-host"]')){ var hrn=e.target.closest('.hostrow'); var hn=hrn&&hostById(hrn.dataset.hid); if(hn){ var v=(e.target.value||'').trim().replace(/^https?:\/\//,'').replace(/\/.*$/,''); hn.host=v; e.target.value=v; save(); render(); pingAll(); } return; }
     if (e.target.matches('[data-act="scheme"]')){ var hr2=e.target.closest('.hostrow'); if(hr2){ var host=state.hosts.find(function(x){return x.id===hr2.dataset.hid;}); if(host){ host.scheme=e.target.value; save(); refreshHosts(); pingAll(); } } return; }
   });
 
   document.addEventListener('input', function(e){
-    if (e.target.id==='search'){ searchQ = e.target.value; renderList(); }
+    if (e.target.id==='search'){ searchQ = e.target.value; renderList(); return; }
+    if (e.target.matches && e.target.matches('[data-act="host-label"]')){ var hr=e.target.closest('.hostrow'); var h=hr&&hostById(hr.dataset.hid); if(h){ h.label=e.target.value; save(); render(); } return; }
+    if (e.target.matches && e.target.matches('[data-act="host-host"]')){ var hr2=e.target.closest('.hostrow'); var h2=hr2&&hostById(hr2.dataset.hid); if(h2){ h2.host=e.target.value; save(); render(); } return; }
   });
 
-  document.addEventListener('keydown', function(e){ if(e.key==='Escape') closeModal(); });
+  document.addEventListener('keydown', function(e){
+    if(e.key==='Escape'){ if(modal.firstChild) closeModal(); return; }
+    if(e.key==='Tab' && modal.firstChild){
+      var f=modal.querySelectorAll('a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])');
+      if(!f.length) return;
+      var first=f[0], last=f[f.length-1];
+      if(e.shiftKey && document.activeElement===first){ e.preventDefault(); last.focus(); }
+      else if(!e.shiftKey && document.activeElement===last){ e.preventDefault(); first.focus(); }
+    }
+  });
 
   // ---- drag reorder (pointer-based: works for both mouse and touch) ----
   var dragId = null;
