@@ -1,6 +1,6 @@
 # Web App Launcher
 
-![version](https://img.shields.io/badge/version-0.3.2-ec3013) ![no build](https://img.shields.io/badge/build-none-232019) ![PWA](https://img.shields.io/badge/PWA-installable-2d6cdf) ![storage](https://img.shields.io/badge/storage-localStorage-6b655c)
+![version](https://img.shields.io/badge/version-0.3.3-ec3013) ![no build](https://img.shields.io/badge/build-none-232019) ![PWA](https://img.shields.io/badge/PWA-installable-2d6cdf) ![storage](https://img.shields.io/badge/storage-localStorage-6b655c)
 
 A front page for the local dev servers you keep coming back to. Add the ports you run, see which are live at a glance, and jump to any of them in a click. One HTML file, no backend, no build step — everything is stored in your browser.
 
@@ -97,7 +97,7 @@ index.html?theme=broadsheet
 
 ## Changelog
 
-### Unreleased
+### 0.3.3
 - Fix: long server names/URLs no longer make a row spill past its host column.
 - Row actions (rename / delete) are now a compact vertical stack pinned to the right, and server names wrap onto multiple lines — leaving much more room for the name.
 
