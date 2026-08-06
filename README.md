@@ -33,6 +33,14 @@ python -m http.server 4173
 
 > **Heads up:** the launcher checks `http://localhost` servers from your browser, so it must run from an **http** origin (open the file locally, or serve it over http on your machine). If you host it over **HTTPS** (e.g. Cloudflare Pages), the browser blocks its requests to `http://localhost` as mixed content, and every server shows offline.
 
+## Portable single file (best for real use)
+
+The launcher's live checks and scans reach your servers from **your browser**, and browsers block requests from an HTTPS page to `http://localhost` (mixed content). So a copy **hosted online over HTTPS can display the UI but can't actually check or scan your machine** — every server shows offline and scans find nothing.
+
+The fix is to **run it locally**. The easiest way is the portable build: download **[`web-app-launcher.html`](web-app-launcher.html)** — the entire app in one file, with the CSS inlined (Modernist theme, no external files). Save it anywhere and open it directly (or serve it over http on your machine), and its checks/scans can reach your `http://localhost` servers.
+
+*(`web-app-launcher.html` is generated from `index.html` + `modernist.css` by `node build-portable.js`; edit those and rebuild.)*
+
 ## Install as an app
 
 Open the app in a browser and choose **Install** (desktop: the install icon in the address bar; iOS Safari: Share → *Add to Home Screen*; Android Chrome: menu → *Install app*). It then opens in its own window and works offline. Installing needs an `https` or `localhost` origin (service workers don't run from `file://`).
@@ -70,6 +78,8 @@ index.html?theme=broadsheet
 | `index.html` | **The app** — markup, logic, and layout in one file. |
 | `modernist.css` | Modernist theme (default), with a dark variant. |
 | `broadsheet.css` | Broadsheet theme (`?theme=broadsheet`), with a dark variant. |
+| `web-app-launcher.html` | **Portable single-file build** — CSS inlined, no external files. Download and open locally. |
+| `build-portable.js` | Node script that generates the portable file from `index.html` + `modernist.css`. |
 | `manifest.webmanifest` | PWA manifest (install metadata). |
 | `sw.js` | Service worker — caches the app shell for offline / instant loads. |
 | `icon.svg` | App icon (vector) — source for the favicon and PWA icons. |
@@ -86,6 +96,10 @@ index.html?theme=broadsheet
 [MIT](LICENSE) © Gerald Untario
 
 ## Changelog
+
+### Unreleased
+- **Portable single-file build** (`web-app-launcher.html`) with the CSS inlined — download and open it locally so localhost checks and scans actually work.
+- A bit more spacing between the live-status label and a row's edit/delete buttons.
 
 ### 0.3.1
 - **Edit hosts** inline (rename / change address) in the Hosts panel.
